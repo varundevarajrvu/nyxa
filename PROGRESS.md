@@ -280,6 +280,16 @@
     nosimd pairs) + `hand_landmarker.task` (float16 v1, 7.8 MB) — verified
     magic bytes + HandLandmarker/FilesetResolver exports. Assets embed in the
     exe (~27 MB added). Rebuild + live test in progress.
+  - **GitHub prep (2026-07-16):** git repo initialized (main, 63 files,
+    ~30 MB). skryver-core is now a GIT dependency (resolves to the same
+    commit as the local checkout); local dev keeps building the sibling
+    checkout via a gitignored `.cargo/config.toml` [patch] — both paths
+    verified (`cargo metadata` unpatched + `cargo check` patched).
+    Excluded from the repo: target/, .venv-check/, testwavs/ (real voice
+    recordings), bench/ (ASR models — cloners run scripts/fetch_models.ps1,
+    URL verified 200). Added README/LICENSE(MIT)/.gitattributes;
+    assistant_update.ps1 projects path genericized (JARVIS_PROJECTS env or
+    ~\brain\raw). Remote repo NOT created yet — awaiting name + go-ahead.
   - **Ops gotchas learned the hard way:**
     · NEVER fire multiple `cargo build` in parallel — they block on the target
       lock, appear to hang, and killing them mid-build corrupts incremental

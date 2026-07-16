@@ -1,5 +1,7 @@
 # Nyxa
 
+**[varundevarajrvu.github.io/nyxa](https://varundevarajrvu.github.io/nyxa/)**
+
 A voice-controlled personal assistant for Windows that runs **entirely on your
 machine** — wake word, speech recognition, intent parsing, and execution are
 all local. No cloud, no API keys, no audio ever leaving your laptop.

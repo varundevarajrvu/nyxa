@@ -1,0 +1,14 @@
+# Build artifacts
+/target/
+
+# Local Python env used only for the J0 reference check
+/.venv-check/
+
+# Personal voice recordings used as local test fixtures
+/testwavs/
+
+# Local dev override: patches the skryver-core git dep to the sibling checkout
+/.cargo/config.toml
+
+# Downloaded ASR models (fetch with scripts/fetch_models.ps1)
+/bench/

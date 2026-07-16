@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nyxa</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { height: 100%; overflow: hidden; background: #030203; }
+      body {
+        font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+        color: #e8ecf6;
+        user-select: none;
+        cursor: default;
+      }
+      #stage { position: fixed; inset: 0; display: block; }
+
+      /* status word under the orb */
+      #status {
+        position: fixed;
+        left: 0; right: 0;
+        bottom: 11%;
+        text-align: center;
+        font-size: clamp(13px, 2.1vw, 18px);
+        letter-spacing: 0.42em;
+        text-transform: uppercase;
+        color: rgba(226, 214, 216, 0.78);
+        text-shadow: 0 0 22px rgba(210, 40, 60, 0.45);
+        pointer-events: none;
+        transition: color 0.4s;
+        z-index: 3;
+      }
+      #status.paused { color: rgba(150, 165, 190, 0.7); text-shadow: 0 0 18px rgba(90,120,170,.3); }
+
+      /* top-right controls */
+      #controls {
+        position: fixed; top: 14px; right: 16px;
+        display: flex; gap: 10px; align-items: center;
+        z-index: 5;
+      }
+      .btn {
+        font: inherit; font-size: 12.5px; letter-spacing: .08em;
+        color: rgba(220, 228, 245, 0.7);
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.12);
+        padding: 6px 13px; border-radius: 999px; cursor: pointer;
+        backdrop-filter: blur(6px);
+        transition: all .2s;
+      }
+      .btn:hover { color: #fff; border-color: rgba(206, 40, 60, 0.7); background: rgba(206,40,60,0.14); }
+
+      /* guide drawer */
+      #guide {
+        position: fixed; top: 0; right: 0; bottom: 0;
+        width: min(440px, 86vw);
+        background: rgba(10, 6, 8, 0.9);
+        backdrop-filter: blur(14px);
+        border-left: 1px solid rgba(206, 40, 60, 0.2);
+        transform: translateX(100%);
+        transition: transform .32s cubic-bezier(.4,0,.2,1);
+        z-index: 6;
+        display: flex; flex-direction: column;
+      }
+      #guide.open { transform: translateX(0); }
+      #guide header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 18px 18px 12px 22px; border-bottom: 1px solid rgba(255,255,255,0.07);
+      }
+      #guide h2 {
+        font-size: 14px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase;
+        color: rgba(226, 214, 216, 0.85);
+      }
+      #closeGuide {
+        font: inherit; font-size: 22px; line-height: 1; cursor: pointer;
+        color: rgba(226,214,216,0.6); background: none; border: none; padding: 2px 10px;
+        border-radius: 8px;
+      }
+      #closeGuide:hover { color: #fff; background: rgba(206,40,60,0.18); }
+      #guidebody { flex: 1; overflow-y: auto; padding: 18px 22px 28px; }
+      #guidebody::-webkit-scrollbar { width: 8px; }
+      #guidebody::-webkit-scrollbar-thumb { background: rgba(206,40,60,0.25); border-radius: 8px; }
+      .lead { font-size: 15.5px; line-height: 1.55; color: rgba(230,224,224,0.9); margin-bottom: 6px; }
+      .lead b { color: #f0a2ac; }
+      #guidebody section { margin-top: 22px; }
+      #guidebody h3 {
+        font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+        color: rgba(206,120,138,0.9); margin-bottom: 10px;
+        display: flex; align-items: center; gap: 8px;
+      }
+      .tag {
+        font-family: ui-sans-serif, system-ui, sans-serif; font-size: 9.5px; font-weight: 600;
+        letter-spacing: .06em; text-transform: none; color: #f0c674;
+        border: 1px solid rgba(240,198,116,.4); border-radius: 999px; padding: 2px 8px;
+      }
+      .cmd {
+        font-size: 14.5px; color: #eae2e2; line-height: 1.4;
+        padding: 8px 12px; margin-bottom: 6px; border-radius: 9px;
+        background: rgba(206,40,60,0.07); border: 1px solid rgba(206,40,60,0.14);
+      }
+      .note { font-size: 13px; line-height: 1.5; color: rgba(200,192,196,0.72); margin-top: 8px; }
+      .note b { color: #f0a2ac; font-weight: 600; }
+      .legend { list-style: none; }
+      .legend li { display: flex; align-items: center; gap: 11px; font-size: 13.5px; color: rgba(215,208,210,0.85); padding: 5px 0; }
+      .d { width: 11px; height: 11px; border-radius: 50%; flex: none; box-shadow: 0 0 10px currentColor; }
+      .d-idle   { background: #7a3c50; color: #7a3c50; }
+      .d-listen { background: #ece4e0; color: #ece4e0; }
+      .d-act    { background: #ce1c30; color: #ce1c30; }
+      .d-paused { background: #7a8cae; color: #556; box-shadow: none; }
+
+      /* camera preview HUD (bottom-left), only while gesture control is on */
+      #camhud {
+        position: fixed; left: 16px; bottom: 16px; z-index: 5;
+        width: 168px; border-radius: 12px; overflow: hidden;
+        border: 1px solid rgba(206,40,60,0.35);
+        box-shadow: 0 0 26px rgba(206,28,48,0.28);
+        background: rgba(8,4,6,0.6); backdrop-filter: blur(6px);
+      }
+      #cam {
+        display: block; width: 100%; height: 118px; object-fit: cover;
+        transform: scaleX(-1); /* mirror — feels natural */
+        background: #000;
+      }
+      #camlabel {
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 11px; letter-spacing: .04em; text-align: center;
+        color: rgba(226,214,216,0.82); padding: 5px 6px;
+        border-top: 1px solid rgba(206,40,60,0.18);
+      }
+      #camlabel.err { color: #f0a2ac; }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+    <div id="status">awakening</div>
+
+    <div id="controls">
+      <button class="btn" id="gestureBtn">Gesture: off</button>
+      <button class="btn" id="pause">Pause</button>
+      <button class="btn" id="musicBtn">Music: on</button>
+      <button class="btn" id="guideBtn">How to use</button>
+    </div>
+
+    <!-- Live camera preview + hand readout, shown only while gesture is on. -->
+    <div id="camhud" hidden>
+      <video id="cam" playsinline muted></video>
+      <div id="camlabel">starting camera…</div>
+    </div>
+
+    <aside id="guide">
+      <header>
+        <h2>How to use Nyxa</h2>
+        <button id="closeGuide" title="Back to Nyxa">&times;</button>
+      </header>
+      <div id="guidebody">
+        <p class="lead">Wake me by <b>clapping three times</b> (or saying <b>&ldquo;Hey Jarvis&rdquo;</b> for now) &mdash; wait for the orb to brighten, then say what you want.</p>
+        <p class="note">A <b>&ldquo;Hey Nyxa&rdquo;</b> voice wake is coming soon; for now, clapping is your quickest way in.</p>
+
+        <section>
+          <h3>Open apps &amp; websites</h3>
+          <div class="cmd">&ldquo;open gmail&rdquo;</div>
+          <div class="cmd">&ldquo;open spotify&rdquo;</div>
+          <div class="cmd">&ldquo;open youtube and search for lo-fi beats&rdquo;</div>
+        </section>
+
+        <section>
+          <h3>Play music &amp; videos</h3>
+          <div class="cmd">&ldquo;play blinding lights on spotify&rdquo;</div>
+          <div class="cmd">&ldquo;play a workout playlist on youtube&rdquo;</div>
+          <div class="cmd">&ldquo;pause the music&rdquo; &middot; &ldquo;next track&rdquo; &middot; &ldquo;volume up&rdquo;</div>
+        </section>
+
+        <section>
+          <h3>Write an email</h3>
+          <div class="cmd">&ldquo;write an email to john saying I&rsquo;ll be late&rdquo;</div>
+          <p class="note">Opens a ready-to-review draft &mdash; it never sends on its own.</p>
+        </section>
+
+        <section>
+          <h3>Close &amp; tidy up <span class="tag">asks first</span></h3>
+          <div class="cmd">&ldquo;close spotify&rdquo;</div>
+          <div class="cmd">&ldquo;close the youtube tab&rdquo;</div>
+          <div class="cmd">&ldquo;delete report.pdf&rdquo;</div>
+          <p class="note">These ask before acting. For close/move Nyxa says <b>&ldquo;yes or no?&rdquo;</b> &mdash; just answer out loud. For delete it pops a window you must <b>click</b>.</p>
+        </section>
+
+        <section>
+          <h3>Move it with your hands <span class="tag">camera</span></h3>
+          <p class="note">Click <b>Gesture</b> (top-right) to turn on hand control. A small camera preview appears bottom-left.</p>
+          <ul class="legend">
+            <li><span class="d d-listen"></span> <b>One hand</b> — move it around and the orb follows</li>
+            <li><span class="d d-act"></span> <b>Two hands</b> — spread apart to zoom in, bring together to zoom out</li>
+          </ul>
+          <p class="note">All on-device — nothing leaves your laptop. Turn it back off to save battery.</p>
+        </section>
+
+        <section>
+          <h3>Stopping Nyxa</h3>
+          <p class="note">Wake me and say <b>&ldquo;stop&rdquo;</b>, press <b>Ctrl&#8202;+&#8202;Shift&#8202;+&#8202;Alt&#8202;+&#8202;K</b>, or click <b>Pause</b>. It stays in the tray &mdash; reopen from the crimson orb icon.</p>
+        </section>
+
+        <section>
+          <h3>Reading the orb</h3>
+          <ul class="legend">
+            <li><span class="d d-idle"></span> calm &amp; slow &mdash; waiting for 3 claps or &ldquo;Hey Jarvis&rdquo;</li>
+            <li><span class="d d-listen"></span> bright with a ring &mdash; listening to your command</li>
+            <li><span class="d d-act"></span> a crimson flare &mdash; doing it</li>
+            <li><span class="d d-paused"></span> dim &amp; cold &mdash; paused</li>
+          </ul>
+        </section>
+      </div>
+    </aside>
+
+    <script>
+      const invoke = window.__TAURI__.core.invoke;
+
+      // ─── The divine energy cluster ─────────────────────────────────────────
+      const canvas = document.getElementById("stage");
+      const ctx = canvas.getContext("2d", { alpha: false });
+      let W = 0, H = 0, DPR = 1, CX = 0, CY = 0, UNIT = 1;
+      // Base (resting) orb centre + scale. Each frame the working CX/CY/UNIT are
+      // derived from these plus the live hand-gesture offset, so the orb can pan
+      // and zoom while the starfield/nebula (tied to W/H) stay fixed behind it.
+      let BCX = 0, BCY = 0, BUNIT = 1;
+
+      function resize() {
+        DPR = Math.min(window.devicePixelRatio || 1, 2);
+        W = canvas.width = Math.floor(innerWidth * DPR);
+        H = canvas.height = Math.floor(innerHeight * DPR);
+        canvas.style.width = innerWidth + "px";
+        canvas.style.height = innerHeight + "px";
+        BCX = W / 2; BCY = H * 0.44;
+        BUNIT = Math.min(W, H) / 2; // orb scale
+        CX = BCX; CY = BCY; UNIT = BUNIT;
+        initStars();
+      }
+
+      // ─── Hand-gesture control (targets set by the MediaPipe module below) ────
+      // gx/gy in [-1,1] pan the orb; gs is the zoom multiplier. Targets are eased
+      // toward each frame so motion is smooth and jitter-free. Exposed on window
+      // so the ES-module hand tracker can write to it.
+      const Gesture = {
+        gx: 0, gy: 0, gs: 1,          // smoothed (what the orb uses)
+        tx: 0, ty: 0, ts: 1,          // targets (set from detected hands)
+        active: false,                 // camera on?
+        hands: 0,                      // last-seen hand count (for the HUD)
+      };
+      window.NyxaGesture = Gesture;
+
+      // Faint drifting starfield for depth behind the orb.
+      let stars = [];
+      function initStars() {
+        stars = [];
+        const n = Math.max(70, Math.round((W * H) / (16000 * DPR)));
+        for (let i = 0; i < n; i++) {
+          const t = Math.random();
+          stars.push({
+            x: Math.random() * W,
+            y: Math.random() * H,
+            r: (0.4 + Math.random() * 1.2) * DPR,
+            tw: Math.random() * Math.PI * 2,
+            sp: 0.4 + Math.random() * 0.9,
+            drift: (0.006 + Math.random() * 0.02) * DPR,
+            // mostly ashen white, a few crimson/violet embers
+            hue: t < 0.12 ? "210,90,110" : t < 0.24 ? "150,130,200" : "214,208,214",
+          });
+        }
+      }
+
+      window.addEventListener("resize", resize);
+      resize();
+
+      // Pre-rendered soft glow sprite (cheap to draw hundreds of times).
+      function makeGlow(rgb) {
+        const s = 64, c = document.createElement("canvas");
+        c.width = c.height = s;
+        const g = c.getContext("2d");
+        const grd = g.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2);
+        grd.addColorStop(0, `rgba(${rgb},1)`);
+        grd.addColorStop(0.25, `rgba(${rgb},0.55)`);
+        grd.addColorStop(1, `rgba(${rgb},0)`);
+        g.fillStyle = grd; g.fillRect(0, 0, s, s);
+        return c;
+      }
+      // Gothic palette: bone-white, blood crimson, ember, deep violet, cold steel.
+      const PAL = {
+        bone:   makeGlow("236,228,224"),
+        blood:  makeGlow("206,28,48"),
+        ember:  makeGlow("255,86,52"),
+        violet: makeGlow("140,58,180"),
+        steel:  makeGlow("150,166,196"),
+      };
+      const PAL_PAUSED = makeGlow("120,140,170"); // dead, cold
+
+      // Particle cloud: layered orbits with radial breathing + swirl.
+      const N = 640;
+      const parts = [];
+      for (let i = 0; i < N; i++) {
+        const layer = Math.random();               // 0 inner .. 1 outer
+        parts.push({
+          a: Math.random() * Math.PI * 2,
+          baseR: (0.10 + layer * 0.80) * (0.9 + Math.random() * 0.2),
+          spd: (0.12 + (1 - layer) * 0.5) * (0.6 + Math.random() * 0.8),
+          osc: 0.02 + Math.random() * 0.07,
+          ph: Math.random() * Math.PI * 2,
+          size: (0.5 + Math.random() * 1.6) * (1.2 - layer * 0.5),
+          // crimson/ember heart, bone+blood mid, violet+steel cold outer
+          sprite: layer < 0.30 ? (Math.random() < 0.55 ? PAL.blood : PAL.ember)
+                : layer < 0.68 ? (Math.random() < 0.5 ? PAL.bone : PAL.blood)
+                : (Math.random() < 0.55 ? PAL.violet : PAL.steel),
+          twk: 0.4 + Math.random() * 0.8,
+        });
+      }
+
+      // Drifting embers that rise and flicker out — gothic ash.
+      const embers = [];
+      function spawnEmber() {
+        const ang = Math.random() * Math.PI * 2;
+        const r = UNIT * (0.15 + Math.random() * 0.5);
+        embers.push({
+          x: CX + Math.cos(ang) * r,
+          y: CY + Math.sin(ang) * r * 0.9,
+          vy: -(0.15 + Math.random() * 0.4) * UNIT * 0.004,
+          vx: (Math.random() - 0.5) * UNIT * 0.002,
+          life: 0.6 + Math.random() * 0.8,
+          sz: (0.6 + Math.random() * 1.4),
+          sprite: Math.random() < 0.6 ? PAL.ember : PAL.blood,
+        });
+      }
+
+      const ripples = [];   // expanding shock rings on actions
+      const filaments = [];  // jagged spectral flickers from the core
+      function spawnFilament() {
+        const ang = Math.random() * Math.PI * 2;
+        const segs = 5 + (Math.random() * 4 | 0);
+        const pts = [[CX, CY]];
+        let a = ang, r = 0;
+        for (let s = 0; s < segs; s++) {
+          r += UNIT * (0.10 + Math.random() * 0.14);
+          a += (Math.random() - 0.5) * 0.7;
+          pts.push([CX + Math.cos(a) * r, CY + Math.sin(a) * r * 0.9]);
+        }
+        filaments.push({ pts, life: 1, hue: Math.random() < 0.5 ? "206,28,48" : "236,228,224" });
+      }
+
+      // Intensity 0..1 driven by state; smoothly eased toward a target.
+      let intensity = 0.35, targetIntensity = 0.5, paused = false;
+      let mode = "idle"; // idle | listen | think | confirm | act | paused
+      let rot = 0, t = 0;
+
+      function draw() {
+        t += 0.016;
+
+        // Ease orb pan/zoom toward the hand-gesture targets, then derive the
+        // working centre + scale the whole orb is drawn around this frame.
+        Gesture.gx += (Gesture.tx - Gesture.gx) * 0.15;
+        Gesture.gy += (Gesture.ty - Gesture.gy) * 0.15;
+        Gesture.gs += (Gesture.ts - Gesture.gs) * 0.12;
+        CX = BCX + Gesture.gx * W * 0.34;
+        CY = BCY + Gesture.gy * H * 0.30;
+        UNIT = BUNIT * Gesture.gs;
+
+        intensity += (targetIntensity - intensity) * 0.05;
+        const I = intensity;
+        rot += 0.0012 + I * 0.006;
+
+        // Fade previous frame -> long smoky trails (lower alpha = more ghost).
+        ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = "rgba(3,2,3," + (0.10 + (1 - I) * 0.05) + ")";
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.globalCompositeOperation = "lighter";
+
+        // Deep nebula haze — gives the void colour + depth.
+        const neb1 = ctx.createRadialGradient(W * 0.22, H * 0.78, 0, W * 0.22, H * 0.78, UNIT * 1.5);
+        neb1.addColorStop(0, "rgba(150,26,52,0.060)");
+        neb1.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = neb1; ctx.fillRect(0, 0, W, H);
+        const neb2 = ctx.createRadialGradient(W * 0.82, H * 0.24, 0, W * 0.82, H * 0.24, UNIT * 1.6);
+        neb2.addColorStop(0, "rgba(88,40,140,0.055)");
+        neb2.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = neb2; ctx.fillRect(0, 0, W, H);
+
+        // Drifting, twinkling stars.
+        for (const s of stars) {
+          s.tw += 0.02 * s.sp;
+          s.y -= s.drift;
+          if (s.y < 0) { s.y = H; s.x = Math.random() * W; }
+          const a = 0.14 + 0.22 * (0.5 + 0.5 * Math.sin(s.tw));
+          ctx.fillStyle = `rgba(${s.hue},${a})`;
+          ctx.fillRect(s.x, s.y, s.r, s.r);
+        }
+
+        // Blood aura behind the cluster.
+        const halo = ctx.createRadialGradient(CX, CY, 0, CX, CY, UNIT * (0.95 + I * 0.5));
+        const hue = paused ? "90,120,170" : "150,20,36";
+        halo.addColorStop(0, `rgba(${hue},${0.12 + I * 0.12})`);
+        halo.addColorStop(0.45, `rgba(${hue},${0.04 + I * 0.05})`);
+        halo.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = halo;
+        ctx.fillRect(0, 0, W, H);
+
+        // Particles (drawn before the eclipse carve so the core reads as a void).
+        const swirl = rot;
+        for (let i = 0; i < N; i++) {
+          const p = parts[i];
+          p.a += p.spd * (0.004 + I * 0.010);
+          const wob = 1 + Math.sin(t * (0.6 + p.twk) + p.ph) * p.osc * (0.6 + I);
+          const r = p.baseR * UNIT * wob * (0.82 + I * 0.28);
+          const ang = p.a + swirl * (0.4 + p.baseR);
+          const x = CX + Math.cos(ang) * r;
+          const y = CY + Math.sin(ang) * r * 0.92;
+          const tw = 0.55 + 0.45 * Math.sin(t * (1.7 + p.twk * 3) + p.ph);
+          const sz = p.size * UNIT * 0.03 * (0.7 + I * 0.7);
+          const alpha = (0.32 + I * 0.5) * tw;
+          drawSprite(paused ? PAL_PAUSED : p.sprite, x, y, sz * 3, alpha);
+        }
+
+        // Embers.
+        if (!paused && Math.random() < 0.3 + I * 0.5) spawnEmber();
+        for (let i = embers.length - 1; i >= 0; i--) {
+          const e = embers[i];
+          e.x += e.vx; e.y += e.vy; e.vy -= UNIT * 0.000015;
+          e.life -= 0.012;
+          if (e.life <= 0) { embers.splice(i, 1); continue; }
+          const fl = 0.5 + 0.5 * Math.sin(t * 9 + i);
+          drawSprite(paused ? PAL_PAUSED : e.sprite, e.x, e.y, e.sz * UNIT * 0.05, e.life * fl * 0.7);
+        }
+
+        // Pulsing corona + eclipse core (a dark heart rimmed in crimson fire).
+        const beat = 0.5 + 0.5 * Math.sin(t * (1.3 + I * 2.0));
+        const coreR = UNIT * (0.17 + 0.04 * beat + I * 0.06);
+        drawSprite(paused ? PAL_PAUSED : PAL.blood, CX, CY, coreR * 3.2, 0.85);
+        drawSprite(paused ? PAL_PAUSED : PAL.ember, CX, CY, coreR * 2.0, 0.7);
+        drawSprite(PAL.bone, CX, CY, coreR * 1.4, paused ? 0.25 : 0.55);
+        // Carve the dark heart.
+        ctx.globalCompositeOperation = "source-over";
+        const dark = ctx.createRadialGradient(CX, CY, 0, CX, CY, coreR * 1.05);
+        dark.addColorStop(0, "rgba(3,2,3,0.98)");
+        dark.addColorStop(0.62, "rgba(3,2,3,0.92)");
+        dark.addColorStop(1, "rgba(3,2,3,0)");
+        ctx.fillStyle = dark;
+        ctx.fillRect(CX - coreR * 1.2, CY - coreR * 1.2, coreR * 2.4, coreR * 2.4);
+        ctx.globalCompositeOperation = "lighter";
+
+        // ATTENTIVE STATE — while capturing your command, a bright pulsing
+        // double-ring makes "I'm listening to you" unmistakable.
+        if (mode === "listen") {
+          const puls = 0.5 + 0.5 * Math.sin(t * 6.5);
+          const pr = UNIT * (0.44 + 0.05 * puls);
+          ctx.lineWidth = 2.6 * DPR;
+          ctx.strokeStyle = `rgba(236,228,224,${0.30 + 0.30 * puls})`;
+          ctx.beginPath(); ctx.arc(CX, CY, pr, 0, Math.PI * 2); ctx.stroke();
+          ctx.lineWidth = 1.6 * DPR;
+          ctx.strokeStyle = `rgba(206,28,48,${0.30 + 0.25 * (1 - puls)})`;
+          ctx.beginPath(); ctx.arc(CX, CY, pr * 0.82, 0, Math.PI * 2); ctx.stroke();
+        }
+
+        // Spectral filaments — rare gothic lightning from the core.
+        if (!paused && Math.random() < 0.012 + I * 0.03) spawnFilament();
+        for (let i = filaments.length - 1; i >= 0; i--) {
+          const f = filaments[i];
+          f.life -= 0.06;
+          if (f.life <= 0) { filaments.splice(i, 1); continue; }
+          ctx.strokeStyle = `rgba(${f.hue},${f.life * 0.55})`;
+          ctx.lineWidth = (0.8 + f.life) * DPR;
+          ctx.beginPath();
+          ctx.moveTo(f.pts[0][0], f.pts[0][1]);
+          for (let s = 1; s < f.pts.length; s++) ctx.lineTo(f.pts[s][0], f.pts[s][1]);
+          ctx.stroke();
+        }
+
+        // Action ripples.
+        for (let i = ripples.length - 1; i >= 0; i--) {
+          const rp = ripples[i];
+          rp.r += UNIT * 0.02;
+          rp.life -= 0.02;
+          if (rp.life <= 0) { ripples.splice(i, 1); continue; }
+          ctx.strokeStyle = `rgba(${rp.hue},${rp.life * 0.5})`;
+          ctx.lineWidth = 2 * DPR;
+          ctx.beginPath();
+          ctx.arc(CX, CY, rp.r, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // Heavy vignette — frame it in shadow.
+        ctx.globalCompositeOperation = "source-over";
+        const vig = ctx.createRadialGradient(CX, CY, UNIT * 0.7, CX, CY, Math.max(W, H) * 0.9);
+        vig.addColorStop(0, "rgba(0,0,0,0)");
+        vig.addColorStop(1, "rgba(0,0,0,0.68)");
+        ctx.fillStyle = vig;
+        ctx.fillRect(0, 0, W, H);
+
+        requestAnimationFrame(draw);
+      }
+
+      function drawSprite(img, x, y, size, alpha) {
+        ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+        ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
+        ctx.globalAlpha = 1;
+      }
+
+      function flare(hue) {
+        ripples.push({ r: UNIT * 0.15, life: 1, hue: hue || "206,28,48" });
+        spawnFilament(); spawnFilament();
+        targetIntensity = Math.min(1, targetIntensity + 0.4);
+      }
+
+      requestAnimationFrame(draw);
+
+      // ─── State wiring ──────────────────────────────────────────────────────
+      // Map the engine's status string to the orb's mood + mode.
+      function moodFrom(status) {
+        const s = (status || "").toLowerCase();
+        if (s.startsWith("paused")) return { i: 0.12, paused: true, mode: "paused", word: "paused" };
+        if (s.startsWith("waiting for on-screen")) return { i: 0.9, mode: "confirm", word: "confirm on screen" };
+        if (s.includes("?")) return { i: 0.85, mode: "confirm", word: "awaiting your yes / no" };
+        if (s.startsWith("thinking")) return { i: 0.95, mode: "think", word: "thinking" };
+        if (s.startsWith("heard")) return { i: 0.85, mode: "act", word: status.slice(6) };
+        if (s.startsWith("listening for")) return { i: 0.38, mode: "idle", word: "waiting" };
+        if (s.startsWith("listening")) return { i: 0.98, mode: "listen", word: "listening…" };
+        if (s.startsWith("didn")) return { i: 0.5, mode: "idle", word: "didn’t catch that" };
+        if (s.startsWith("couldn")) return { i: 0.5, mode: "idle", word: "model offline" };
+        if (s.includes(":")) return { i: 0.7, mode: "act", word: status.split(":")[1].trim() };
+        return { i: 0.45, mode: "idle", word: status || "ready" };
+      }
+
+      let lastStatus = "";
+      async function tickStatus() {
+        try {
+          const s = await invoke("get_status");
+          paused = !!s.paused;
+          const m = moodFrom(s.status);
+          targetIntensity = m.i;
+          mode = m.paused ? "paused" : m.mode;
+          const statusEl = document.getElementById("status");
+          statusEl.textContent = m.word;
+          statusEl.classList.toggle("paused", !!m.paused);
+          document.getElementById("pause").textContent = paused ? "Resume" : "Pause";
+          if (s.status !== lastStatus) {
+            const ls = (s.status || "").toLowerCase();
+            if (ls.includes("executed") || ls.startsWith("heard")) {
+              flare(ls.includes("executed") ? "236,228,224" : "206,28,48");
+            }
+            lastStatus = s.status;
+          }
+        } catch (e) {}
+      }
+
+      // ─── Guide drawer ──────────────────────────────────────────────────────
+      const guideEl = document.getElementById("guide");
+      const closeGuide = () => guideEl.classList.remove("open");
+      document.getElementById("pause").addEventListener("click", async () => { await invoke("toggle_pause"); tickStatus(); });
+      document.getElementById("guideBtn").addEventListener("click", () => guideEl.classList.toggle("open"));
+      document.getElementById("closeGuide").addEventListener("click", closeGuide);
+      // Esc closes the guide; clicking the orb (outside the drawer) too.
+      window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeGuide(); });
+      canvas.addEventListener("click", closeGuide);
+
+      // ─── Ambient music (procedural — no audio files) ────────────────────────
+      // A faint, dark A-minor drone with a reverb wash and sparse ethereal
+      // bells, to match the gothic orb. All synthesized; nothing external.
+      const Music = (() => {
+        let ctx, master, lp, on = false, built = false, bellTimer = null;
+        function build() {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          ctx = new AC();
+          master = ctx.createGain(); master.gain.value = 0.0001;
+          lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1100; lp.Q.value = 0.4;
+          const delay = ctx.createDelay(1.2); delay.delayTime.value = 0.45;
+          const fb = ctx.createGain(); fb.gain.value = 0.35;
+          const wet = ctx.createGain(); wet.gain.value = 0.55;
+          delay.connect(fb); fb.connect(delay);
+          lp.connect(master); lp.connect(delay); delay.connect(wet); wet.connect(master);
+          master.connect(ctx.destination);
+
+          const chord = [110, 130.81, 164.81, 220]; // A2 C3 E3 A3 — dark minor
+          chord.forEach((f, i) => {
+            const o = ctx.createOscillator();
+            o.type = i < 2 ? "sine" : "triangle";
+            o.frequency.value = f; o.detune.value = (Math.random() - 0.5) * 7;
+            const g = ctx.createGain(); const base = (i < 2 ? 0.5 : 0.3) / chord.length;
+            g.gain.value = base;
+            const lfo = ctx.createOscillator(); lfo.frequency.value = 0.03 + Math.random() * 0.05;
+            const lfoG = ctx.createGain(); lfoG.gain.value = base * 0.6;
+            lfo.connect(lfoG); lfoG.connect(g.gain);
+            o.connect(g); g.connect(lp); o.start(); lfo.start();
+          });
+
+          const bells = [220, 261.63, 329.63, 392, 440, 523.25]; // A minor pentatonic
+          (function bell() {
+            if (on && ctx.state === "running") {
+              const f = bells[(Math.random() * bells.length) | 0] * (Math.random() < 0.25 ? 2 : 1);
+              const o = ctx.createOscillator(); o.type = "sine"; o.frequency.value = f;
+              const g = ctx.createGain(); const t = ctx.currentTime;
+              g.gain.setValueAtTime(0.0001, t);
+              g.gain.linearRampToValueAtTime(0.1, t + 0.03);
+              g.gain.exponentialRampToValueAtTime(0.0001, t + 3.6);
+              let out = g;
+              if (ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = (Math.random() - 0.5) * 1.4; g.connect(p); out = p; }
+              o.connect(g); out.connect(lp); o.start(t); o.stop(t + 4);
+            }
+            bellTimer = setTimeout(bell, 7000 + Math.random() * 13000);
+          })();
+        }
+        function fade(to, secs) {
+          if (!ctx) return;
+          const t = ctx.currentTime;
+          master.gain.cancelScheduledValues(t);
+          master.gain.setValueAtTime(Math.max(master.gain.value, 0.0001), t);
+          master.gain.exponentialRampToValueAtTime(Math.max(to, 0.0001), t + secs);
+        }
+        return {
+          set(v) {
+            on = v;
+            if (v) {
+              if (!built) { try { build(); built = true; } catch (e) { return; } }
+              if (ctx.state === "suspended") ctx.resume();
+              fade(0.04, 4); // faint — very low in the mix
+            } else { fade(0.0001, 1.5); }
+          }
+        };
+      })();
+
+      const musicBtn = document.getElementById("musicBtn");
+      let musicOn = localStorage.getItem("jarvis_music") !== "off"; // default on
+      function applyMusic() { Music.set(musicOn); musicBtn.textContent = musicOn ? "Music: on" : "Music: off"; }
+      musicBtn.addEventListener("click", () => {
+        musicOn = !musicOn;
+        try { localStorage.setItem("jarvis_music", musicOn ? "on" : "off"); } catch (e) {}
+        applyMusic();
+      });
+      applyMusic();
+      // Webviews block audio until a user gesture — resume on the first one.
+      const kick = () => { if (musicOn) Music.set(true); };
+      window.addEventListener("pointerdown", kick, { once: true });
+      window.addEventListener("keydown", kick, { once: true });
+
+      // Show the guide automatically the first time only.
+      try {
+        if (!localStorage.getItem("jarvis_seen_guide")) {
+          guideEl.classList.add("open");
+          localStorage.setItem("jarvis_seen_guide", "1");
+        }
+      } catch (e) {}
+
+      tickStatus();
+      setInterval(tickStatus, 280);
+    </script>
+
+    <!-- ─── Hand-gesture control (MediaPipe HandLandmarker, all local) ─────── -->
+    <script type="module">
+      import { HandLandmarker, FilesetResolver } from "./vendor/tasks-vision.mjs";
+
+      const G = window.NyxaGesture;
+      const btn = document.getElementById("gestureBtn");
+      const hud = document.getElementById("camhud");
+      const video = document.getElementById("cam");
+      const label = document.getElementById("camlabel");
+
+      let landmarker = null, stream = null, running = false, raf = 0;
+      let lastVideoTime = -1, noHandSince = 0;
+      const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+      function setLabel(text, err) { label.textContent = text; label.classList.toggle("err", !!err); }
+      function neutral() { G.tx = 0; G.ty = 0; G.ts = 1; }
+
+      async function ensureLandmarker() {
+        if (landmarker) return landmarker;
+        setLabel("loading model…");
+        const fileset = await FilesetResolver.forVisionTasks("./vendor/wasm");
+        landmarker = await HandLandmarker.createFromOptions(fileset, {
+          baseOptions: { modelAssetPath: "./vendor/hand_landmarker.task" },
+          runningMode: "VIDEO",
+          numHands: 2,
+        });
+        return landmarker;
+      }
+
+      // Palm centre ≈ midpoint of wrist (0) and middle-finger knuckle (9).
+      const palm = (h) => ({ x: (h[0].x + h[9].x) / 2, y: (h[0].y + h[9].y) / 2 });
+
+      function onResults(res) {
+        const hands = res.landmarks || [];
+        G.hands = hands.length;
+        if (hands.length === 0) {
+          if (!noHandSince) noHandSince = performance.now();
+          if (performance.now() - noHandSince > 400) neutral();  // ease home
+          setLabel("show a hand ✋");
+          return;
+        }
+        noHandSince = 0;
+        if (hands.length === 1) {
+          // One hand → orb follows it (mirror x for a natural, selfie feel).
+          const p = palm(hands[0]);
+          G.tx = clamp((1 - p.x - 0.5) * 2.2, -1, 1);
+          G.ty = clamp((p.y - 0.5) * 2.2, -1, 1);
+          setLabel("✋ move · 1 hand");
+        } else {
+          // Two hands → position from their midpoint, zoom from their spread.
+          const a = palm(hands[0]), b = palm(hands[1]);
+          G.tx = clamp((1 - (a.x + b.x) / 2 - 0.5) * 2.2, -1, 1);
+          G.ty = clamp(((a.y + b.y) / 2 - 0.5) * 2.2, -1, 1);
+          const d = Math.hypot(a.x - b.x, a.y - b.y);        // ~0.12 together … ~0.6 apart
+          G.ts = clamp(0.6 + ((d - 0.12) / (0.6 - 0.12)) * (2.2 - 0.6), 0.55, 2.4);
+          setLabel("🙌 zoom · 2 hands");
+        }
+      }
+
+      function loop() {
+        if (!running) return;
+        if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+          lastVideoTime = video.currentTime;
+          try { onResults(landmarker.detectForVideo(video, performance.now())); } catch (e) {}
+        }
+        raf = requestAnimationFrame(loop);
+      }
+
+      async function start() {
+        try {
+          btn.textContent = "Gesture: …";
+          hud.hidden = false;
+          await ensureLandmarker();
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480, facingMode: "user" }, audio: false,
+          });
+          video.srcObject = stream;
+          await video.play();
+          running = true; G.active = true;
+          btn.textContent = "Gesture: on";
+          setLabel("show a hand ✋");
+          loop();
+        } catch (e) {
+          setLabel("camera unavailable: " + (e.name || e.message || e), true);
+          btn.textContent = "Gesture: off";
+          running = false; G.active = false;
+        }
+      }
+
+      function stop() {
+        running = false; G.active = false;
+        if (raf) { cancelAnimationFrame(raf); raf = 0; }
+        if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
+        video.srcObject = null;
+        hud.hidden = true;
+        G.hands = 0;
+        neutral();
+        btn.textContent = "Gesture: off";
+      }
+
+      btn.addEventListener("click", () => (running ? stop() : start()));
+    </script>
+  </body>
+</html>

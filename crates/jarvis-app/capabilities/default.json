@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Jarvis window",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

@@ -1,0 +1,6 @@
+[workspace]
+resolver = "2"
+members = ["crates/wake-spike", "crates/jarvis-core", "crates/jarvis-cli", "crates/jarvis-app"]
+
+[profile.release]
+lto = "thin"

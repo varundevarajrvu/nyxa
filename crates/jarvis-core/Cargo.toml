@@ -1,0 +1,23 @@
+[package]
+name = "jarvis-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+ndarray = "0.17"
+ort = { version = "2.0.0-rc.12", features = ["ndarray"] }
+sherpa-rs = { version = "0.6.8", default-features = false, features = ["download-binaries"] }
+cpal = "0.18"
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+ureq = { version = "2", features = ["json"] }
+winapi = { version = "0.3", features = ["shellapi", "winuser", "timezoneapi"] }
+# The local dictation project was renamed whispr -> skryver; keep the
+# `whispr_core` name in code via a package rename so no source changes are needed.
+# Local dev builds against the sibling checkout via the [patch] in
+# .cargo/config.toml (gitignored); cloners fetch skryver-core from GitHub.
+whispr-core = { package = "skryver-core", git = "https://github.com/varundevarajrvu/skryver", branch = "main" }
+hound = "3.5"

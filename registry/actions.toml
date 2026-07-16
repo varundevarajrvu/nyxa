@@ -1,0 +1,331 @@
+# Jarvis tool registry — data, not code. Schema: REGISTRY.md.
+# Reviewed by action-planner 2026-07-09 (see REGISTRY.md "Review outcomes").
+#
+# MATCHING ORDER MATTERS: stage-0 grammar tries actions top to bottom, first
+# full match wins. Keep more specific actions (youtube.search) above catch-all
+# ones (web.search).
+#
+# SECURITY: the [sites] and [apps] maps are reviewable security data.
+# Site values must be bare HTTPS landing origins — no state-changing GET
+# endpoints, no deep links. App values are fixed argv arrays — user-derived
+# arguments are never appended.
+
+[sites]
+"gmail" = "https://mail.google.com"
+"youtube" = "https://www.youtube.com"
+"github" = "https://github.com"
+"google" = "https://www.google.com"
+"google calendar" = "https://calendar.google.com"
+"calendar" = "https://calendar.google.com"
+"maps" = "https://maps.google.com"
+"google maps" = "https://maps.google.com"
+"netflix" = "https://www.netflix.com"
+"whatsapp" = "https://web.whatsapp.com"
+"claude" = "https://claude.ai"
+"linkedin" = "https://www.linkedin.com"
+
+[apps]
+"notepad" = ["notepad.exe"]
+"calculator" = ["calc.exe"]
+"files" = ["explorer.exe"]
+"file explorer" = ["explorer.exe"]
+"explorer" = ["explorer.exe"]
+"vs code" = ["cmd.exe", "/C", "code"]
+"vscode" = ["cmd.exe", "/C", "code"]
+"visual studio code" = ["cmd.exe", "/C", "code"]
+"terminal" = ["cmd.exe", "/C", "start", "cmd.exe"]
+"spotify" = ["cmd.exe", "/C", "start", "spotify:"]
+"edge" = ["cmd.exe", "/C", "start", "msedge"]
+"microsoft edge" = ["cmd.exe", "/C", "start", "msedge"]
+"chrome" = ["cmd.exe", "/C", "start", "chrome"]
+
+# App alias -> OS process base name, for graceful close (app.close, WM_CLOSE).
+# Only apps here are closable. Explorer is intentionally omitted — closing it
+# kills the taskbar/shell. Names are what Get-Process expects (no .exe).
+[close_process]
+"notepad" = "notepad"
+"spotify" = "Spotify"
+"vs code" = "Code"
+"vscode" = "Code"
+"visual studio code" = "Code"
+"terminal" = "WindowsTerminal"
+"edge" = "msedge"
+"microsoft edge" = "msedge"
+"chrome" = "chrome"
+"calculator" = "CalculatorApp"
+
+# Site alias -> browser-tab title keyword, for closing an open website tab
+# (web.close). Matched case-insensitively against visible window titles; the
+# window whose ACTIVE tab is this site gets a Ctrl+W (closes that tab only).
+[web_title]
+"youtube" = "YouTube"
+"gmail" = "Gmail"
+"github" = "GitHub"
+"netflix" = "Netflix"
+"whatsapp" = "WhatsApp"
+"linkedin" = "LinkedIn"
+"claude" = "Claude"
+"maps" = "Google Maps"
+"google maps" = "Google Maps"
+"calendar" = "Google Calendar"
+"google calendar" = "Google Calendar"
+
+# ── SAFE-AUTO ────────────────────────────────────────────────────────────────
+
+[[action]]
+id = "youtube.search"
+tier = "safe-auto"
+description = "Open the default browser to the YouTube search results page for a spoken query."
+patterns = [
+    "open youtube (and )?(search|look) (for )?{query}",
+    "search (on |in )?youtube for {query}",
+    "youtube search (for )?{query}",
+]
+params = [{ name = "query", type = "string", max_len = 120 }]
+exec = { kind = "open_url", template = "https://www.youtube.com/results?search_query={query|urlencode}" }
+
+# Spotify BEFORE youtube.play so "play X on spotify" wins over the bare
+# "play {query}" catch-all. Opens Spotify to the search results — true
+# one-command autoplay needs the Web API (credentials), which we don't use.
+[[action]]
+id = "spotify.play"
+tier = "safe-auto"
+description = "Play a song/artist on Spotify — searches the app and starts the matching track via UI automation (no API key needed)."
+patterns = [
+    "play {query} on spotify",
+    "open spotify (and )?play {query}",
+    "spotify play {query}",
+]
+params = [{ name = "query", type = "string", max_len = 120 }]
+exec = { kind = "ps_template", script = "spotify_play.ps1" }
+
+# Real playback, no API key: reads the public results page for the top
+# video id and opens its watch page (autoplays). Bare "play X" lands here.
+[[action]]
+id = "youtube.play"
+tier = "safe-auto"
+description = "Play the top YouTube result for a query (autoplays the video). Also the default for a bare 'play X'."
+patterns = [
+    "play {query} on youtube",
+    "open youtube (and )?play {query}",
+    "youtube play {query}",
+    "play {query}",
+]
+params = [{ name = "query", type = "string", max_len = 120 }]
+exec = { kind = "youtube_play" }
+
+# Open a prefilled Gmail draft (you review + send). Keyless — just a compose URL.
+[[action]]
+id = "email.draft"
+tier = "safe-auto"
+description = "Open a prefilled Gmail compose draft addressed to someone with a spoken body. Opens a draft only — never sends."
+patterns = [
+    "(write|draft|compose) an email to {recipient} saying {body}",
+    "(write|draft|compose) an email to {recipient} that says {body}",
+]
+params = [
+    { name = "recipient", type = "string", max_len = 100 },
+    { name = "body", type = "string", max_len = 500 },
+]
+exec = { kind = "open_url", template = "https://mail.google.com/mail/?view=cm&fs=1&to={recipient|urlencode}&body={body|urlencode}" }
+
+[[action]]
+id = "web.search"
+tier = "safe-auto"
+description = "Open the default browser to a Google search for a spoken query."
+patterns = [
+    "search (the web |google |online )?(for )?{query}",
+    "google {query}",
+    "look up {query}",
+]
+params = [{ name = "query", type = "string", max_len = 120 }]
+exec = { kind = "open_url", template = "https://www.google.com/search?q={query|urlencode}" }
+
+[[action]]
+id = "browser.open_site"
+tier = "safe-auto"
+description = "Open a known website (from the reviewed site alias map) in the default browser."
+patterns = ["open (my )?{site}", "go to {site}", "open up {site}"]
+params = [{ name = "site", type = "site_alias" }]
+exec = { kind = "open_url", template = "{site|site_url}" }
+
+[[action]]
+id = "app.launch"
+tier = "safe-auto"
+description = "Launch an application from the reviewed app allowlist. Never passes arguments."
+patterns = ["open {app}", "launch {app}", "start {app}"]
+params = [{ name = "app", type = "app_alias" }]
+exec = { kind = "launch_app" }
+
+[[action]]
+id = "media.control"
+tier = "safe-auto"
+description = "Media transport: play/pause, next track, previous track."
+patterns = ["{control}"]
+exec = { kind = "media_key", key = "{control}" }
+
+[[action.params]]
+name = "control"
+type = "enum"
+[action.params.values]
+playpause = ["play", "pause", "resume", "play the music", "pause the music", "play music", "pause music", "pause the song", "resume the music", "pause this"]
+next = ["next", "skip", "next track", "next song", "skip this song", "skip song", "play the next song"]
+prev = ["previous", "previous track", "previous song", "go back a track", "play the previous song"]
+
+[[action]]
+id = "system.volume"
+tier = "safe-auto"
+description = "Volume up/down (2 steps) or mute toggle."
+patterns = ["{direction}"]
+exec = { kind = "media_key", key = "{direction}" }
+
+[[action.params]]
+name = "direction"
+type = "enum"
+[action.params.values]
+volume_up = ["volume up", "turn it up", "turn the volume up", "increase the volume", "louder"]
+volume_down = ["volume down", "turn it down", "turn the volume down", "decrease the volume", "lower the volume", "quieter"]
+mute = ["mute", "unmute", "mute the volume", "toggle mute"]
+
+[[action]]
+id = "news.read"
+tier = "safe-auto"
+description = "Read out the latest news headlines (world, tech, sport, India) aloud."
+patterns = [
+    "(read|tell me|whats|what is|give me)( the)?( latest| todays)? news",
+    "(read|tell me) me the news",
+    "news update",
+    "hows the news",
+    "any news",
+]
+exec = { kind = "read_news" }
+
+[[action]]
+id = "assistant.update"
+tier = "safe-auto"
+description = "Speak a status update: system (RAM, battery, running apps) and your most recent project."
+patterns = [
+    "(give me|whats)( an| the| my)? (update|status)",
+    "status update",
+    "system status",
+    "hows my (system|computer|pc)",
+    "hows my project( going)?",
+    "project (update|status)",
+    "whats running",
+    "brief me",
+]
+exec = { kind = "assistant_update" }
+
+[[action]]
+id = "weather.read"
+tier = "safe-auto"
+description = "Read the current weather aloud (temperature, feels-like, humidity) — spoken, not a webpage."
+patterns = [
+    "(read|tell)( me)? (the )?weather",
+    "(check|show)( me)? (the )?weather",
+    "whats the weather( like)?( today| outside| now)?",
+    "how is the weather( today| outside)?",
+    "hows the weather",
+    "weather( report| check| today| update)?",
+]
+exec = { kind = "read_weather" }
+
+# ── NEEDS-CONFIRM (spoken yes/no gate — flow lands in J5) ────────────────────
+
+[[action]]
+id = "app.close"
+tier = "needs-confirm"
+description = "Gracefully close an application (WM_CLOSE, never force-kill). Target resolved through the app allowlist only."
+patterns = ["close {app}( browser)?", "quit {app}", "exit {app}"]
+params = [{ name = "app", type = "app_alias" }]
+exec = { kind = "ps_template", script = "close_app.ps1" }
+
+[[action]]
+id = "web.close"
+tier = "needs-confirm"
+description = "Close the open browser tab showing a known website (focuses its window, sends Ctrl+W — closes that tab only)."
+patterns = ["close {site}", "close the {site} tab", "close {site} tab", "close the {site} page"]
+params = [{ name = "site", type = "site_alias" }]
+exec = { kind = "ps_template", script = "close_window.ps1" }
+
+[[action]]
+id = "file.move"
+tier = "needs-confirm"
+description = "Move a file within the user profile. Canonicalized (symlinks resolved first), profile-jailed, never overwrites."
+patterns = ["move {src} to {dst}", "move the file {src} to {dst}"]
+params = [
+    { name = "src", type = "path", max_len = 200 },
+    { name = "dst", type = "path", max_len = 200 },
+]
+exec = { kind = "ps_template", script = "file_move.ps1" }
+
+[[action]]
+id = "file.rename"
+tier = "needs-confirm"
+description = "Rename a file within the user profile. Same guards as file.move."
+patterns = ["rename {src} to {dst}"]
+params = [
+    { name = "src", type = "path", max_len = 200 },
+    { name = "dst", type = "path", max_len = 200 },
+]
+exec = { kind = "ps_template", script = "file_rename.ps1" }
+
+[[action]]
+id = "system.sleep"
+tier = "needs-confirm"
+description = "Put the computer to sleep."
+patterns = ["(put the computer|go) to sleep", "sleep the computer", "sleep now"]
+exec = { kind = "ps_template", script = "sleep.ps1" }
+
+# ── DENY-BY-DEFAULT (non-voice dialog gate — flow lands in J5) ───────────────
+
+[[action]]
+id = "pkg.install"
+tier = "deny-by-default"
+description = "Install a package via winget (exact id, official source only). Dialog shows the resolved id + source."
+patterns = ["install {pkg}", "install the app {pkg}"]
+params = [{ name = "pkg", type = "string", max_len = 80 }]
+exec = { kind = "dialog_only" }
+
+[[action]]
+id = "file.delete"
+tier = "deny-by-default"
+description = "Delete ONE file (Recycle Bin semantics). Single canonicalized profile-jailed path; no wildcards, no recursion. Dialog shows the resolved absolute path."
+patterns = ["delete {path}", "delete the file {path}", "remove the file {path}"]
+params = [{ name = "path", type = "path", max_len = 200 }]
+exec = { kind = "recycle_file" }
+
+[[action]]
+id = "message.send"
+tier = "deny-by-default"
+description = "Send an email/message. Dialog renders the RESOLVED recipient address and full body verbatim; nothing sends before the click."
+patterns = ["send (an email|a message|an sms) to {recipient} saying {body}"]
+params = [
+    { name = "recipient", type = "string", max_len = 100 },
+    { name = "body", type = "string", max_len = 500 },
+]
+exec = { kind = "dialog_only" }
+
+[[action]]
+id = "system.settings"
+tier = "deny-by-default"
+description = "Change a system setting from a FIXED enum of pre-scripted settings. No freeform settings, no registry writes."
+patterns = ["{setting}"]
+exec = { kind = "dialog_only" }
+
+[[action.params]]
+name = "setting"
+type = "enum"
+[action.params.values]
+default_browser = ["change the default browser", "change my default browser"]
+power_high_performance = ["switch power plan to high performance", "set power plan to high performance"]
+power_balanced = ["switch power plan to balanced", "set power plan to balanced"]
+
+[[action]]
+id = "shell.run"
+tier = "deny-by-default"
+enabled = false            # OFF by default per action-planner review — power-user opt-in
+description = "Run an arbitrary shell command. Always opus-classified; dialog shows the command character-for-character. Runs inside the kill-switch Job object."
+patterns = ["run (the )?command {cmd}"]
+params = [{ name = "cmd", type = "string", max_len = 300 }]
+exec = { kind = "dialog_only" }

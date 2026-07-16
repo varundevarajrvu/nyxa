@@ -1,0 +1,8 @@
+[package]
+name = "jarvis-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+jarvis-core = { path = "../jarvis-core" }
+anyhow = "1"

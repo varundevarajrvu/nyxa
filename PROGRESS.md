@@ -289,7 +289,11 @@
     recordings), bench/ (ASR models — cloners run scripts/fetch_models.ps1,
     URL verified 200). Added README/LICENSE(MIT)/.gitattributes;
     assistant_update.ps1 projects path genericized (JARVIS_PROJECTS env or
-    ~\brain\raw). Remote repo NOT created yet — awaiting name + go-ahead.
+    ~\brain\raw). PUBLISHED: github.com/varundevarajrvu/nyxa (public, MIT).
+    Landing page live at varundevarajrvu.github.io/nyxa (GitHub Pages,
+    main /docs — same pattern as skryver); linked from README + repo
+    homepage field. First push 408'd on the 30 MB pack; retry with
+    http.postBuffer=150MB worked.
   - **Ops gotchas learned the hard way:**
     · NEVER fire multiple `cargo build` in parallel — they block on the target
       lock, appear to hang, and killing them mid-build corrupts incremental

@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Nyxa — a voice assistant that lives entirely on your Windows machine. Wake word, speech recognition, and execution all run locally. No cloud, no account, no API keys.">
+<meta property="og:title" content="Nyxa — a voice in the dark that answers to no cloud">
+<meta property="og:description" content="Local voice + hand-gesture assistant for Windows. Everything runs on your machine; nothing leaves it.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cdefs%3E%3CradialGradient id='g' cx='50%25' cy='50%25'%3E%3Cstop offset='0%25' stop-color='%23120507'/%3E%3Cstop offset='55%25' stop-color='%23ce1c30'/%3E%3Cstop offset='100%25' stop-color='%23ce1c30' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='24' cy='24' r='22' fill='url(%23g)'/%3E%3Ccircle cx='24' cy='24' r='9' fill='%23050203'/%3E%3C/svg%3E">
+<title>Nyxa — local voice assistant for Windows</title>
+<style>
+/* ============================================================================
+   NYXA — landing page.
+   The page is the app: void-black, Palatino serif, crimson eclipse orb.
+   ============================================================================ */
+:root{
+  --void:        #030203;
+  --void-raised: #0d070a;
+  --bone:        #e6dfe0;
+  --bone-soft:   rgba(226,214,216,0.78);
+  --bone-faint:  rgba(200,192,196,0.55);
+  --crimson:     #ce1c30;
+  --rose:        #f0a2ac;
+  --ember:       #f0c674;
+  --steel:       #96a5be;
+  --rule:        rgba(206,40,60,0.18);
+  --rule-faint:  rgba(255,255,255,0.08);
+  --font-serif:  "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --font-mono:   Consolas, "SFMono-Regular", ui-monospace, "Courier New", monospace;
+  --ease:        cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+*{ box-sizing:border-box; margin:0; padding:0; }
+html{ scroll-behavior:smooth; }
+@media (prefers-reduced-motion: reduce){ html{ scroll-behavior:auto; } }
+
+body{
+  background:var(--void);
+  color:var(--bone);
+  font-family:var(--font-serif);
+  font-size:17px;
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  overflow-x:hidden;
+}
+
+a{ color:var(--rose); text-decoration:none; }
+a:hover{ color:#fff; }
+:focus-visible{ outline:2px solid var(--crimson); outline-offset:3px; border-radius:2px; }
+::selection{ background:rgba(206,28,48,0.4); color:#fff; }
+
+/* ── hero ─────────────────────────────────────────────────────────────── */
+#hero{
+  position:relative;
+  min-height:100svh;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  text-align:center;
+  padding:48px 20px 72px;
+  overflow:hidden;
+}
+#orb{ position:absolute; inset:0; width:100%; height:100%; }
+.hero-inner{ position:relative; z-index:2; }
+
+.eyebrow{
+  font-size:12px; letter-spacing:0.42em; text-transform:uppercase;
+  color:var(--bone-faint);
+}
+h1{
+  font-size:clamp(64px, 14vw, 150px);
+  font-weight:400;
+  letter-spacing:0.14em;
+  text-indent:0.14em; /* re-centre after tracking */
+  line-height:1.05;
+  margin:10px 0 6px;
+  color:var(--bone);
+  text-shadow:0 0 60px rgba(206,28,48,0.55), 0 0 140px rgba(206,28,48,0.25);
+}
+.tagline{
+  font-size:clamp(17px, 2.6vw, 22px);
+  font-style:italic;
+  color:var(--bone-soft);
+  max-width:34ch; margin:0 auto;
+}
+.plain{
+  font-size:15px; font-style:normal;
+  color:var(--bone-faint);
+  margin-top:10px;
+}
+#word{
+  display:block;
+  margin-top:42px;
+  font-size:13px; letter-spacing:0.42em; text-transform:uppercase;
+  color:var(--bone-soft);
+  text-shadow:0 0 22px rgba(210,40,60,0.45);
+  transition:opacity 0.6s;
+  min-height:1.4em;
+}
+.cta{
+  display:flex; gap:14px; justify-content:center; flex-wrap:wrap;
+  margin-top:26px;
+}
+.btn{
+  font-family:var(--font-serif); font-size:14.5px; letter-spacing:0.1em;
+  padding:11px 26px; border-radius:999px; cursor:pointer;
+  border:1px solid rgba(255,255,255,0.16);
+  background:rgba(255,255,255,0.04);
+  color:var(--bone);
+  backdrop-filter:blur(6px);
+  transition:border-color .2s, background .2s, color .2s;
+}
+.btn:hover{ border-color:rgba(206,40,60,0.75); background:rgba(206,28,48,0.16); color:#fff; }
+.btn.primary{ border-color:rgba(206,40,60,0.6); background:rgba(206,28,48,0.2); }
+.trust{
+  position:absolute; bottom:26px; left:0; right:0; z-index:2;
+  font-size:12px; letter-spacing:0.26em; text-transform:uppercase;
+  color:var(--bone-faint);
+}
+.trust b{ color:var(--rose); font-weight:400; }
+
+/* ── sections ─────────────────────────────────────────────────────────── */
+main{ position:relative; z-index:2; }
+section{
+  max-width:820px; margin:0 auto; padding:88px 22px 8px;
+}
+.kicker{
+  font-size:12px; font-weight:400; letter-spacing:0.38em; text-transform:uppercase;
+  color:rgba(206,120,138,0.9);
+  display:flex; align-items:center; gap:16px;
+}
+.kicker::after{
+  content:""; flex:1; height:1px;
+  background:linear-gradient(to right, var(--rule), transparent);
+}
+h2{
+  font-size:clamp(26px, 4.4vw, 36px); font-weight:400; line-height:1.25;
+  margin:16px 0 14px; color:var(--bone);
+}
+.body{ color:var(--bone-soft); max-width:62ch; }
+.body b, .body strong{ color:var(--rose); font-weight:600; }
+
+/* ── spoken commands with their gates ─────────────────────────────────── */
+.litany{ list-style:none; margin-top:30px; }
+.litany li{
+  display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  padding:15px 18px; margin-bottom:10px;
+  border:1px solid rgba(206,40,60,0.14);
+  border-radius:12px;
+  background:rgba(206,40,60,0.05);
+  transition:border-color .25s var(--ease), background .25s var(--ease);
+}
+.litany li:hover{ border-color:rgba(206,40,60,0.4); background:rgba(206,28,48,0.09); }
+.say{ font-size:16.5px; color:#eae2e2; flex:1 1 300px; }
+.say::before{ content:"“"; color:var(--rose); }
+.say::after{ content:"”"; color:var(--rose); }
+.gate{
+  font-family:var(--font-mono); font-size:10.5px; letter-spacing:0.08em;
+  padding:3px 10px; border-radius:999px; white-space:nowrap;
+  border:1px solid; background:transparent;
+}
+.gate.safe   { color:var(--bone-soft); border-color:rgba(226,214,216,0.3); }
+.gate.confirm{ color:var(--ember);     border-color:rgba(240,198,116,0.45); }
+.gate.deny   { color:#ff5468;          border-color:rgba(206,28,48,0.65); }
+.gate-note{ flex-basis:100%; font-size:13px; color:var(--bone-faint); font-style:italic; }
+
+/* ── pipeline ─────────────────────────────────────────────────────────── */
+.pipe{ list-style:none; margin-top:30px; border-left:1px solid var(--rule); }
+.pipe li{ position:relative; padding:0 0 26px 30px; }
+.pipe li:last-child{ padding-bottom:4px; }
+.pipe li::before{
+  content:""; position:absolute; left:-5px; top:9px;
+  width:9px; height:9px; border-radius:50%;
+  background:var(--void); border:1.5px solid var(--crimson);
+  box-shadow:0 0 10px rgba(206,28,48,0.6);
+}
+.pipe h3{ font-size:17px; font-weight:600; color:var(--bone); }
+.pipe h3 span{
+  font-family:var(--font-mono); font-size:11px; font-weight:400;
+  color:var(--bone-faint); letter-spacing:0.06em; margin-left:10px;
+}
+.pipe p{ font-size:15px; color:var(--bone-soft); max-width:56ch; margin-top:3px; }
+.vow{
+  margin-top:30px; padding:20px 24px;
+  border:1px solid var(--rule); border-radius:12px;
+  background:rgba(206,28,48,0.05);
+  font-style:italic; font-size:16.5px; color:var(--bone-soft);
+}
+.vow b{ color:var(--rose); font-weight:600; font-style:normal; }
+
+/* ── tiers ────────────────────────────────────────────────────────────── */
+.tiers{ display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-top:30px; }
+.tier{
+  border:1px solid var(--rule-faint); border-radius:14px;
+  padding:22px 20px;
+  background:var(--void-raised);
+}
+.tier .gate{ font-size:11px; }
+.tier h3{ font-size:18px; font-weight:600; margin:12px 0 6px; color:var(--bone); }
+.tier p{ font-size:14.5px; color:var(--bone-soft); }
+.tier.deny-card{ border-color:rgba(206,28,48,0.35); box-shadow:0 0 30px rgba(206,28,48,0.08) inset; }
+
+/* ── kill switch ──────────────────────────────────────────────────────── */
+kbd{
+  font-family:var(--font-mono); font-size:13px;
+  padding:3px 9px; border-radius:6px;
+  border:1px solid rgba(255,255,255,0.2);
+  border-bottom-width:2.5px;
+  background:rgba(255,255,255,0.05);
+  color:var(--bone);
+}
+
+/* ── setup ────────────────────────────────────────────────────────────── */
+pre{
+  margin-top:26px; padding:22px 24px;
+  border:1px solid var(--rule-faint); border-radius:14px;
+  background:#08050a;
+  overflow-x:auto;
+  font-family:var(--font-mono); font-size:13.5px; line-height:1.9;
+  color:var(--bone-soft);
+}
+pre .c{ color:rgba(150,165,190,0.55); }
+pre .p{ color:var(--rose); user-select:none; }
+
+/* ── footer ───────────────────────────────────────────────────────────── */
+footer{
+  margin-top:96px; padding:34px 22px 44px;
+  border-top:1px solid var(--rule-faint);
+  text-align:center;
+  font-size:13.5px; color:var(--bone-faint);
+}
+footer .sep{ margin:0 12px; color:rgba(206,40,60,0.5); }
+
+@media (max-width:720px){
+  .tiers{ grid-template-columns:1fr; }
+  section{ padding-top:66px; }
+}
+</style>
+</head>
+<body>
+
+<header id="hero">
+  <canvas id="orb" aria-hidden="true"></canvas>
+  <div class="hero-inner">
+    <p class="eyebrow">local voice assistant · windows</p>
+    <h1>NYXA</h1>
+    <p class="tagline">A voice in the dark that answers to no&nbsp;cloud.</p>
+    <p class="plain">Wake word, speech recognition, and execution all run on your machine. Nothing leaves it.</p>
+    <span id="word">listening</span>
+    <nav class="cta" aria-label="Primary">
+      <a class="btn primary" href="https://github.com/varundevarajrvu/nyxa">View on GitHub</a>
+      <a class="btn" href="#setup">Get set up</a>
+    </nav>
+  </div>
+  <p class="trust"><b>no cloud</b> · no account · no API keys · open source</p>
+</header>
+
+<main>
+  <section id="say">
+    <p class="kicker">say it</p>
+    <h2>Speak plainly. Every command passes a gate.</h2>
+    <p class="body">Say <b>“hey jarvis”</b> — or clap three times — wait for the orb to brighten, then ask. Each action carries a permission tier that decides how much ceremony stands between your words and the machine.</p>
+    <ul class="litany">
+      <li>
+        <span class="say">open youtube and search lo-fi study beats</span>
+        <span class="gate safe">SAFE-AUTO</span>
+        <span class="gate-note">reversible — runs the moment you finish speaking</span>
+      </li>
+      <li>
+        <span class="say">play believer on spotify</span>
+        <span class="gate safe">SAFE-AUTO</span>
+        <span class="gate-note">finds and presses play in the Spotify app itself — no API key</span>
+      </li>
+      <li>
+        <span class="say">close the youtube tab</span>
+        <span class="gate confirm">NEEDS-CONFIRM</span>
+        <span class="gate-note">Nyxa asks “yes or no?” out loud and waits for your answer</span>
+      </li>
+      <li>
+        <span class="say">delete report.pdf</span>
+        <span class="gate deny">DENY-BY-DEFAULT</span>
+        <span class="gate-note">pops a dialog you must physically click — a voice can’t approve it, and files go to the Recycle Bin, never gone for good</span>
+      </li>
+    </ul>
+  </section>
+
+  <section id="hears">
+    <p class="kicker">how it hears</p>
+    <h2>From breath to deed, without leaving the room.</h2>
+    <ol class="pipe">
+      <li>
+        <h3>Wake word <span>openWakeWord · ~5% of one core</span></h3>
+        <p>A two-second ring buffer, read by one scorer, waiting for “hey jarvis”. Below the threshold, audio is simply overwritten.</p>
+      </li>
+      <li>
+        <h3>Capture <span>Silero VAD</span></h3>
+        <p>The orb brightens, your sentence is taken whole, and the endpointer knows when you've finished.</p>
+      </li>
+      <li>
+        <h3>Transcription <span>Parakeet TDT 0.6B · on-device</span></h3>
+        <p>Speech becomes text in 150–350 ms, on your CPU.</p>
+      </li>
+      <li>
+        <h3>Intent <span>grammar first · local LLM fallback</span></h3>
+        <p>A grammar over the action registry resolves most commands instantly with no model at all. What it misses goes to a local LLM via Ollama — schema-validated, and refused on any doubt.</p>
+      </li>
+      <li>
+        <h3>The gate <span>tier comes from the registry, never from a model</span></h3>
+        <p>No model output can name, change, or downgrade a permission tier. Any error, anywhere, and nothing executes.</p>
+      </li>
+    </ol>
+    <p class="vow">Before the wake word fires, nothing is recorded, transcribed, or stored — and with a local LLM, <b>nothing you say ever leaves the machine</b>. Every outcome, including refusals, is written to an append-only audit log you can read.</p>
+  </section>
+
+  <section id="gates">
+    <p class="kicker">the gates</p>
+    <h2>Three tiers between a voice and a side effect.</h2>
+    <div class="tiers">
+      <div class="tier">
+        <span class="gate safe">SAFE-AUTO</span>
+        <h3>Runs at once</h3>
+        <p>Read-only or trivially reversible: open, search, play, pause, volume.</p>
+      </div>
+      <div class="tier">
+        <span class="gate confirm">NEEDS-CONFIRM</span>
+        <h3>Asks aloud</h3>
+        <p>State-changing but recoverable: closing apps and tabs, moving files. A spoken “yes” proceeds; anything else — including silence — cancels.</p>
+      </div>
+      <div class="tier deny-card">
+        <span class="gate deny">DENY-BY-DEFAULT</span>
+        <h3>Demands a hand</h3>
+        <p>Destructive or outward-facing: deleting, sending, installing. Approval is a physical click on a dialog, so a stray voice — yours or your TV's — cannot grant it.</p>
+      </div>
+    </div>
+    <p class="body" style="margin-top:26px">And when you want silence: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd> halts everything, instantly, from any state. Resume is manual — a kill is never quietly self-healed.</p>
+  </section>
+
+  <section id="hands">
+    <p class="kicker">hands</p>
+    <h2>It watches for gestures the way it listens for words.</h2>
+    <p class="body">Turn on gesture control and the orb follows your hand through the webcam — one hand to pan, two hands spread apart to zoom. Hand tracking runs locally too (MediaPipe); the camera feed never leaves the page, let alone the machine. Try it above: <b>the orb already leans toward your pointer.</b></p>
+  </section>
+
+  <section id="setup">
+    <p class="kicker">summoning</p>
+    <h2>Four commands and it lives on your machine.</h2>
+    <pre><code><span class="c"># requires Rust and a mic; Ollama is optional but recommended</span>
+<span class="p">&gt;</span> git clone https://github.com/varundevarajrvu/nyxa <span class="c">&amp;&amp;</span> cd nyxa
+<span class="p">&gt;</span> powershell -ExecutionPolicy Bypass -File scripts\fetch_models.ps1
+<span class="p">&gt;</span> cargo build --release -p jarvis-app
+<span class="p">&gt;</span> .\target\release\jarvis-app.exe</code></pre>
+    <p class="body" style="margin-top:18px">Full setup, configuration, and the action registry are in the <a href="https://github.com/varundevarajrvu/nyxa#readme">README</a>.</p>
+  </section>
+</main>
+
+<footer>
+  <a href="https://github.com/varundevarajrvu/nyxa">GitHub</a><span class="sep">·</span>MIT license<span class="sep">·</span>speech recognition by <a href="https://github.com/varundevarajrvu/skryver">skryver</a><span class="sep">·</span>built by Varun Devaraj
+</footer>
+
+<script>
+/* ── the orb — a quiet miniature of the app's energy cluster ──────────── */
+(() => {
+  const canvas = document.getElementById("orb");
+  const ctx = canvas.getContext("2d");
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  let W = 0, H = 0, DPR = 1, CX = 0, CY = 0, R = 0;
+  const embers = [];
+  let px = 0, py = 0, gx = 0, gy = 0;    // pointer target / eased offset
+
+  function resize() {
+    DPR = Math.min(devicePixelRatio || 1, 2);
+    W = canvas.width = Math.floor(innerWidth * DPR);
+    H = canvas.height = Math.floor(canvas.offsetHeight * DPR);
+    CX = W / 2; CY = H * 0.46;
+    R = Math.min(W, H) * 0.34;
+    embers.length = 0;
+    const n = reduced ? 0 : Math.round(90 + Math.min(W, 1600 * DPR) / 22);
+    for (let i = 0; i < n; i++) {
+      embers.push({
+        a: Math.random() * Math.PI * 2,
+        r: R * (0.55 + Math.random() * 0.85),
+        s: (0.0018 + Math.random() * 0.004) * (Math.random() < 0.5 ? -1 : 1),
+        sz: (0.6 + Math.random() * 1.7) * DPR,
+        tw: Math.random() * Math.PI * 2,
+        el: 0.62 + Math.random() * 0.3,   // orbit ellipticity
+      });
+    }
+  }
+
+  addEventListener("pointermove", (e) => {
+    px = (e.clientX / innerWidth - 0.5) * 2;
+    py = (e.clientY / innerHeight - 0.5) * 2;
+  }, { passive: true });
+
+  function draw(t) {
+    ctx.clearRect(0, 0, W, H);
+    gx += (px - gx) * 0.04;
+    gy += (py - gy) * 0.04;
+    const breathe = reduced ? 1 : 1 + Math.sin(t / 2400) * 0.035;
+    const cx = CX + gx * R * 0.22, cy = CY + gy * R * 0.16;
+    const r = R * breathe;
+
+    // blood aura
+    let g = ctx.createRadialGradient(cx, cy, r * 0.1, cx, cy, r * 2.4);
+    g.addColorStop(0, "rgba(206,28,48,0.34)");
+    g.addColorStop(0.45, "rgba(140,16,34,0.13)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.globalCompositeOperation = "lighter";
+
+    // corona
+    g = ctx.createRadialGradient(cx, cy, r * 0.28, cx, cy, r);
+    g.addColorStop(0, "rgba(255,80,100,0.55)");
+    g.addColorStop(0.62, "rgba(206,28,48,0.30)");
+    g.addColorStop(1, "rgba(206,28,48,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+
+    // embers
+    for (const e of embers) {
+      e.a += e.s;
+      const flick = 0.35 + 0.65 * Math.abs(Math.sin(t / 900 + e.tw));
+      const ex = cx + Math.cos(e.a) * e.r;
+      const ey = cy + Math.sin(e.a) * e.r * e.el;
+      ctx.fillStyle = `rgba(255,120,130,${0.5 * flick})`;
+      ctx.beginPath(); ctx.arc(ex, ey, e.sz * flick, 0, 7); ctx.fill();
+    }
+
+    // thin ritual ring
+    ctx.strokeStyle = "rgba(240,162,172,0.28)";
+    ctx.lineWidth = 1 * DPR;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, r * 1.28, r * 0.94, -0.35, 0, 7);
+    ctx.stroke();
+
+    ctx.globalCompositeOperation = "source-over";
+
+    // eclipse core — the dark sun
+    g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 0.42);
+    g.addColorStop(0, "rgba(3,2,3,0.98)");
+    g.addColorStop(0.82, "rgba(10,3,6,0.92)");
+    g.addColorStop(1, "rgba(30,6,12,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.42, 0, 7); ctx.fill();
+
+    if (!reduced) requestAnimationFrame(draw);
+  }
+
+  resize();
+  addEventListener("resize", resize);
+  requestAnimationFrame(draw);
+
+  /* status word beneath the orb, cycling like the real app */
+  if (!reduced) {
+    const el = document.getElementById("word");
+    const words = ["listening", "thinking", "acting", "idle"];
+    let i = 0;
+    setInterval(() => {
+      el.style.opacity = 0;
+      setTimeout(() => { i = (i + 1) % words.length; el.textContent = words[i]; el.style.opacity = 1; }, 600);
+    }, 3400);
+  }
+})();
+</script>
+</body>
+</html>

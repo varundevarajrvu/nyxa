@@ -320,7 +320,9 @@
   `ACTIONS` array when `registry/actions.toml` changes (the landing page
   keeps a second copy for its hero preview). Landing page (`docs/index.html`)
   restyled to match: same tokens, Inter, top nav, and a live mini console
-  (network + scripted command log) as the hero. Tray icon is still crimson.
+  (network + scripted command log) as the hero. App/tray/exe icons
+  regenerated to the console mark (dark disc, light ring, cyan core) at
+  16/32/48/128/256 + multi-size icon.ico.
 
 ## Hard-won knowledge (do not re-learn)
 

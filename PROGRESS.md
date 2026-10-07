@@ -5,6 +5,111 @@
 **Project:** Jarvis — voice-controlled personal automation agent on top of whispr's local STT.
 **Repo root:** `C:\Users\varun\brain\raw\jarvis` (consumes `../whispr/crates/whispr-core` as path dep — not yet wired).
 
+## ▶ ACTIVE HANDOFF (2026-10-07) — UI redesign, build blocked locally
+
+Picked up from a Claude Code cloud session. Read this section first.
+
+**Branch / PR:** `claude/eloquent-newton-prd9pe`, draft PR
+https://github.com/varundevarajrvu/nyxa/pull/1 (3 commits on top of `main` @ 7b31540).
+Mergeable, no CI in this repo, no review comments.
+
+**What the branch changes**
+1. `crates/jarvis-app/ui/index.html` — full rewrite as a dark dashboard
+   console (reference: Pinterest "Handshake influence dashboard" — top bar,
+   network canvas + bottom timeline, ranking sidebar).
+   - Canvas network: 22 registry actions grouped into 7 hubs, coloured by tier
+     (green safe-auto / gold needs-confirm / rose deny / grey disabled), core
+     orb in the centre. Seeded layout + label-collision relaxation pass.
+   - The action list is a hand-kept mirror (`ACTIONS` array) of
+     `registry/actions.toml`. Unknown ids still show in the log, just no node.
+   - Status: polls `get_status` every 280 ms; `moodFrom()` maps the engine's
+     status strings (`Listening…`, `Thinking…`, `Heard: …`, `{id}: {outcome}`,
+     `Paused…`, `Waiting for on-screen…`) to core modes. `{id}: {outcome}`
+     fires a signal from the core to that node.
+   - History: polls `get_history` every 5 s (command already existed in
+     `main.rs` but the old UI never used it; reads %APPDATA%\jarvis\audit.jsonl,
+     newest 80). Feeds the sidebar (Recent / Top actions), node sizes, day
+     timeline (‹ › up to 6 days back), and the 7-day Heatmap tab.
+     `outcomeClass()` buckets audit outcomes: executed/spoke = ok;
+     dry_run/cooldown/declined/*confirm* = warn; everything else = bad.
+   - Kept: MediaPipe gesture module (now pans/zooms the network via
+     `window.NyxaGesture`), procedural music, guide drawer, Pause button,
+     localStorage keys `jarvis_music` / `jarvis_seen_guide`.
+   - `invoke` falls back gracefully if `window.__TAURI__` is missing.
+2. `crates/jarvis-app/src/main.rs` — only window size: 1160×720, min 640×480.
+3. `crates/jarvis-app/icons/*` — regenerated (dark disc, light ring, cyan
+   core); tray uses `32x32.png` via `include_bytes!`, exe uses `icon.ico`.
+4. `docs/index.html` — landing page restyled to match (Inter, top nav, live
+   mini-console hero with a scripted demo; second hand-kept action list).
+5. README / PROGRESS wording.
+
+**Verified (cloud, Linux):** UI rendered in headless Chromium with a mocked
+`__TAURI__` (idle/listen/think/act/paused/heatmap/guide, 820 px and 640 px),
+interactions threw no errors; landing page at 1366 px and 390 px, no overflow.
+**NOT verified:** never compiled or run on Windows / WebView2.
+
+**RESOLVED (2026-10-07, same day) — build unblocked, verified live, merged.**
+
+**Blocker fix:** the stuck PID 25800 (~7 MB, 0.05 s CPU, the exact one
+flagged above) genuinely resists `Stop-Process -Force` and even `taskkill
+/F /T` ("no running instance of the task" despite `Get-Process` still
+listing it) — a real zombie, harmless, does NOT hold the file lock
+(confirmed: rename + delete of its exe both succeeded while it was still
+listed). The actual lock each time came from a **live, fully-loaded**
+jarvis-app instance (~1.6 GB PM) left running from a prior launch — kill
+that one (`Stop-Process` works fine on it) and the build proceeds. Fallback
+that always works regardless: `Rename-Item target\release\jarvis-app.exe
+jarvis-app.old.exe` (Windows allows renaming a running exe), then build.
+Watch for **duplicate instances**: a build can leave two full ~1.6 GB
+processes running simultaneously (single-instance plugin didn't catch it
+in testing) — `Get-Process jarvis-app` before relying on "the" PID.
+
+**Live-verified in the real Chromium/WebView2 build (not just headless
+Linux):** engine loads, mic/wake pipeline is genuinely active (audit count
+climbed from 3→31 during this session from ambient sound — confirms
+continuous listening, not a stub), `get_history`/`get_status` polling
+populates the sidebar + top-bar stats from the real `audit.jsonl`, orb
+reacts live (listening/thinking modes observed unprompted), network-node
+click → command-log filter interaction works, tray + window launch
+correctly, "Nyxa" title and cyan icon mark confirmed.
+
+**WebView2-specific bug found, NOT fixed — documented here instead:**
+genuinely double-clicking the title bar to maximize (real OS maximize, not
+a synthetic resize) clips the top-bar's rightmost controls (Gesture/Music/
+Pause/?) and the entire Command-log sidebar past the window's right edge.
+Isolated with a Playwright pass over the same `ui/index.html` at every
+width 640–1920 CSS px with `window.__TAURI__` mocked: **zero overflow at
+any width** — the grid/flex layout (`.workspace { grid-template-columns:
+minmax(0,1fr) 330px }`) is correctly responsive, so this is a WebView2
+surface-resync issue (the rendered content staying laid out for the old
+viewport after `SIZE_MAXIMIZED`), not a CSS bug.
+Tried fix: hook `WindowEvent::Resized` in `main.rs` and re-assert
+`win.set_size(*size)` to force Tauri/wry to re-push bounds to the WebView2
+controller — this is the documented community workaround for the general
+"webview doesn't resize" class of issue. **Made it worse**: it fights the
+OS's own maximize positioning — the window grew to maximized dimensions
+but kept its pre-maximize top-left origin, ending up ~170 px off the right
+edge of the screen. **Reverted** (back to the plain `.build();` with no
+resize hook — this is what's on `main` now). Net effect of the known bug:
+cosmetic only, only on genuine maximize, core functionality (network,
+status, Pause/Resume, the always-visible controls) unaffected; sidebar is
+reachable by un-maximizing. Flagged as a follow-up, not a blocker —
+re-attempt with real WebView2 DevTools access (this session's Chrome
+extension wasn't connected, so verification relied on raw win32
+screenshot automation, which is what made a second resize-hook attempt too
+unreliable to risk).
+
+**Next steps, in order**
+1. ~~Kill blocker, build~~ — done, see above.
+2. ~~Run + visually verify in the real app~~ — done, see above.
+3. **Follow-up, not started:** fix the maximize-only sidebar clip properly,
+   with real WebView2 DevTools attached (`devtools` Cargo feature) rather
+   than screenshot-only verification.
+4. ~~Mark PR #1 ready and merge~~ — done.
+
+**Possible follow-up (not started):** a `get_actions` Tauri command that
+serves the registry to the UI, removing the hand-kept `ACTIONS` mirror(s).
+
 ## Decisions
 
 | Decision | Value | Status |
@@ -310,6 +415,19 @@
       interface set garbage/muted the mic. Correct order documented in
       /tmp/micfix2.ps1 pattern (Set/GetMasterVolumeLevelScalar at slots 5/7,
       SetMute/GetMute at 12/13).
+- **UI redesign (2026-10-07):** `crates/jarvis-app/ui/index.html` rebuilt as a
+  dark analytics-dashboard console (Pinterest "Handshake" dashboard as the
+  reference). Canvas network of the 22 registry actions grouped by area and
+  coloured by tier around the core orb; command log + "Top actions" ranking
+  now read `get_history` (was unused); day timeline; 7-day heatmap. Gesture
+  pan/zoom, pause, music, guide drawer all kept. Default window 1160×720
+  (min 640×480). The action list is mirrored by hand in the UI — update the
+  `ACTIONS` array when `registry/actions.toml` changes (the landing page
+  keeps a second copy for its hero preview). Landing page (`docs/index.html`)
+  restyled to match: same tokens, Inter, top nav, and a live mini console
+  (network + scripted command log) as the hero. App/tray/exe icons
+  regenerated to the console mark (dark disc, light ring, cyan core) at
+  16/32/48/128/256 + multi-size icon.ico.
 
 ## Hard-won knowledge (do not re-learn)
 

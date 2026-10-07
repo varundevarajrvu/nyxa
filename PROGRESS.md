@@ -5,6 +5,80 @@
 **Project:** Jarvis — voice-controlled personal automation agent on top of whispr's local STT.
 **Repo root:** `C:\Users\varun\brain\raw\jarvis` (consumes `../whispr/crates/whispr-core` as path dep — not yet wired).
 
+## ▶ ACTIVE HANDOFF (2026-10-07) — UI redesign, build blocked locally
+
+Picked up from a Claude Code cloud session. Read this section first.
+
+**Branch / PR:** `claude/eloquent-newton-prd9pe`, draft PR
+https://github.com/varundevarajrvu/nyxa/pull/1 (3 commits on top of `main` @ 7b31540).
+Mergeable, no CI in this repo, no review comments.
+
+**What the branch changes**
+1. `crates/jarvis-app/ui/index.html` — full rewrite as a dark dashboard
+   console (reference: Pinterest "Handshake influence dashboard" — top bar,
+   network canvas + bottom timeline, ranking sidebar).
+   - Canvas network: 22 registry actions grouped into 7 hubs, coloured by tier
+     (green safe-auto / gold needs-confirm / rose deny / grey disabled), core
+     orb in the centre. Seeded layout + label-collision relaxation pass.
+   - The action list is a hand-kept mirror (`ACTIONS` array) of
+     `registry/actions.toml`. Unknown ids still show in the log, just no node.
+   - Status: polls `get_status` every 280 ms; `moodFrom()` maps the engine's
+     status strings (`Listening…`, `Thinking…`, `Heard: …`, `{id}: {outcome}`,
+     `Paused…`, `Waiting for on-screen…`) to core modes. `{id}: {outcome}`
+     fires a signal from the core to that node.
+   - History: polls `get_history` every 5 s (command already existed in
+     `main.rs` but the old UI never used it; reads %APPDATA%\jarvis\audit.jsonl,
+     newest 80). Feeds the sidebar (Recent / Top actions), node sizes, day
+     timeline (‹ › up to 6 days back), and the 7-day Heatmap tab.
+     `outcomeClass()` buckets audit outcomes: executed/spoke = ok;
+     dry_run/cooldown/declined/*confirm* = warn; everything else = bad.
+   - Kept: MediaPipe gesture module (now pans/zooms the network via
+     `window.NyxaGesture`), procedural music, guide drawer, Pause button,
+     localStorage keys `jarvis_music` / `jarvis_seen_guide`.
+   - `invoke` falls back gracefully if `window.__TAURI__` is missing.
+2. `crates/jarvis-app/src/main.rs` — only window size: 1160×720, min 640×480.
+3. `crates/jarvis-app/icons/*` — regenerated (dark disc, light ring, cyan
+   core); tray uses `32x32.png` via `include_bytes!`, exe uses `icon.ico`.
+4. `docs/index.html` — landing page restyled to match (Inter, top nav, live
+   mini-console hero with a scripted demo; second hand-kept action list).
+5. README / PROGRESS wording.
+
+**Verified (cloud, Linux):** UI rendered in headless Chromium with a mocked
+`__TAURI__` (idle/listen/think/act/paused/heatmap/guide, 820 px and 640 px),
+interactions threw no errors; landing page at 1366 px and 390 px, no overflow.
+**NOT verified:** never compiled or run on Windows / WebView2.
+
+**Current blocker (on Varun's machine):**
+`cargo build --release -p jarvis-app` → `failed to remove file
+target\release\jarvis-app.exe — Access is denied (os error 5)`.
+A `jarvis-app` process (PID 25800 at the time, ~7 MB private memory, 0.05 s
+CPU) survived `Stop-Process -Force` (error was hidden by SilentlyContinue).
+That footprint is far below a loaded engine, so it is probably a stuck
+startup instance and/or elevated. Also: re-running the old exe after each
+failed build re-locked the file.
+
+**Next steps, in order**
+1. Kill it and see the real error: `taskkill /F /T /IM jarvis-app.exe`
+   (from an Administrator PowerShell if "Access is denied").
+   Fallback that always works: `Rename-Item target\release\jarvis-app.exe
+   jarvis-app.old.exe` (Windows allows renaming a running exe), then build.
+2. `cargo build --release -p jarvis-app` — one build at a time (see Ops
+   gotchas below). Do not launch any exe until it prints `Finished`.
+3. Run from the repo root: `.\target\release\jarvis-app.exe`. If it hangs or
+   leaves another ~7 MB process with no window, debug startup
+   (`Engine::load` → models resolve from cwd; single-instance plugin) —
+   a debug build (`cargo run -p jarvis-app`) keeps the console for stderr.
+4. Check in the real app: console renders; sidebar fills from the audit log;
+   status pill + core react to "hey jarvis" / 3 claps; executing e.g.
+   "volume up" fires a signal to the Volume node and adds a log row; Gesture
+   pans/zooms; Pause/Resume; guide opens; tray icon is the new cyan mark
+   (unpin/re-pin if Windows shows a cached icon).
+5. Fix anything WebView2-specific, push to the same branch, then mark PR #1
+   ready and merge (GitHub Pages rebuilds the landing page from `main`).
+
+**Possible follow-up (not started):** a `get_actions` Tauri command that
+serves the registry to the UI, removing the hand-kept `ACTIONS` mirror(s).
+
 ## Decisions
 
 | Decision | Value | Status |

@@ -317,8 +317,10 @@
   now read `get_history` (was unused); day timeline; 7-day heatmap. Gesture
   pan/zoom, pause, music, guide drawer all kept. Default window 1160×720
   (min 640×480). The action list is mirrored by hand in the UI — update the
-  `ACTIONS` array when `registry/actions.toml` changes. Landing page
-  (`docs/index.html`) and tray icon still use the old crimson look.
+  `ACTIONS` array when `registry/actions.toml` changes (the landing page
+  keeps a second copy for its hero preview). Landing page (`docs/index.html`)
+  restyled to match: same tokens, Inter, top nav, and a live mini console
+  (network + scripted command log) as the hero. Tray icon is still crimson.
 
 ## Hard-won knowledge (do not re-learn)
 

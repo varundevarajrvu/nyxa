@@ -48,33 +48,64 @@ Mergeable, no CI in this repo, no review comments.
 interactions threw no errors; landing page at 1366 px and 390 px, no overflow.
 **NOT verified:** never compiled or run on Windows / WebView2.
 
-**Current blocker (on Varun's machine):**
-`cargo build --release -p jarvis-app` → `failed to remove file
-target\release\jarvis-app.exe — Access is denied (os error 5)`.
-A `jarvis-app` process (PID 25800 at the time, ~7 MB private memory, 0.05 s
-CPU) survived `Stop-Process -Force` (error was hidden by SilentlyContinue).
-That footprint is far below a loaded engine, so it is probably a stuck
-startup instance and/or elevated. Also: re-running the old exe after each
-failed build re-locked the file.
+**RESOLVED (2026-10-07, same day) — build unblocked, verified live, merged.**
+
+**Blocker fix:** the stuck PID 25800 (~7 MB, 0.05 s CPU, the exact one
+flagged above) genuinely resists `Stop-Process -Force` and even `taskkill
+/F /T` ("no running instance of the task" despite `Get-Process` still
+listing it) — a real zombie, harmless, does NOT hold the file lock
+(confirmed: rename + delete of its exe both succeeded while it was still
+listed). The actual lock each time came from a **live, fully-loaded**
+jarvis-app instance (~1.6 GB PM) left running from a prior launch — kill
+that one (`Stop-Process` works fine on it) and the build proceeds. Fallback
+that always works regardless: `Rename-Item target\release\jarvis-app.exe
+jarvis-app.old.exe` (Windows allows renaming a running exe), then build.
+Watch for **duplicate instances**: a build can leave two full ~1.6 GB
+processes running simultaneously (single-instance plugin didn't catch it
+in testing) — `Get-Process jarvis-app` before relying on "the" PID.
+
+**Live-verified in the real Chromium/WebView2 build (not just headless
+Linux):** engine loads, mic/wake pipeline is genuinely active (audit count
+climbed from 3→31 during this session from ambient sound — confirms
+continuous listening, not a stub), `get_history`/`get_status` polling
+populates the sidebar + top-bar stats from the real `audit.jsonl`, orb
+reacts live (listening/thinking modes observed unprompted), network-node
+click → command-log filter interaction works, tray + window launch
+correctly, "Nyxa" title and cyan icon mark confirmed.
+
+**WebView2-specific bug found, NOT fixed — documented here instead:**
+genuinely double-clicking the title bar to maximize (real OS maximize, not
+a synthetic resize) clips the top-bar's rightmost controls (Gesture/Music/
+Pause/?) and the entire Command-log sidebar past the window's right edge.
+Isolated with a Playwright pass over the same `ui/index.html` at every
+width 640–1920 CSS px with `window.__TAURI__` mocked: **zero overflow at
+any width** — the grid/flex layout (`.workspace { grid-template-columns:
+minmax(0,1fr) 330px }`) is correctly responsive, so this is a WebView2
+surface-resync issue (the rendered content staying laid out for the old
+viewport after `SIZE_MAXIMIZED`), not a CSS bug.
+Tried fix: hook `WindowEvent::Resized` in `main.rs` and re-assert
+`win.set_size(*size)` to force Tauri/wry to re-push bounds to the WebView2
+controller — this is the documented community workaround for the general
+"webview doesn't resize" class of issue. **Made it worse**: it fights the
+OS's own maximize positioning — the window grew to maximized dimensions
+but kept its pre-maximize top-left origin, ending up ~170 px off the right
+edge of the screen. **Reverted** (back to the plain `.build();` with no
+resize hook — this is what's on `main` now). Net effect of the known bug:
+cosmetic only, only on genuine maximize, core functionality (network,
+status, Pause/Resume, the always-visible controls) unaffected; sidebar is
+reachable by un-maximizing. Flagged as a follow-up, not a blocker —
+re-attempt with real WebView2 DevTools access (this session's Chrome
+extension wasn't connected, so verification relied on raw win32
+screenshot automation, which is what made a second resize-hook attempt too
+unreliable to risk).
 
 **Next steps, in order**
-1. Kill it and see the real error: `taskkill /F /T /IM jarvis-app.exe`
-   (from an Administrator PowerShell if "Access is denied").
-   Fallback that always works: `Rename-Item target\release\jarvis-app.exe
-   jarvis-app.old.exe` (Windows allows renaming a running exe), then build.
-2. `cargo build --release -p jarvis-app` — one build at a time (see Ops
-   gotchas below). Do not launch any exe until it prints `Finished`.
-3. Run from the repo root: `.\target\release\jarvis-app.exe`. If it hangs or
-   leaves another ~7 MB process with no window, debug startup
-   (`Engine::load` → models resolve from cwd; single-instance plugin) —
-   a debug build (`cargo run -p jarvis-app`) keeps the console for stderr.
-4. Check in the real app: console renders; sidebar fills from the audit log;
-   status pill + core react to "hey jarvis" / 3 claps; executing e.g.
-   "volume up" fires a signal to the Volume node and adds a log row; Gesture
-   pans/zooms; Pause/Resume; guide opens; tray icon is the new cyan mark
-   (unpin/re-pin if Windows shows a cached icon).
-5. Fix anything WebView2-specific, push to the same branch, then mark PR #1
-   ready and merge (GitHub Pages rebuilds the landing page from `main`).
+1. ~~Kill blocker, build~~ — done, see above.
+2. ~~Run + visually verify in the real app~~ — done, see above.
+3. **Follow-up, not started:** fix the maximize-only sidebar clip properly,
+   with real WebView2 DevTools attached (`devtools` Cargo feature) rather
+   than screenshot-only verification.
+4. ~~Mark PR #1 ready and merge~~ — done.
 
 **Possible follow-up (not started):** a `get_actions` Tauri command that
 serves the registry to the UI, removing the hand-kept `ACTIONS` mirror(s).

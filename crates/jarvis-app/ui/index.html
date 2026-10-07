@@ -5,154 +5,530 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Nyxa</title>
     <style>
+      /* ============================================================================
+         NYXA — command console.
+         Dark analytics-dashboard layout: top bar, action-network canvas with a
+         day timeline, and a command-log sidebar fed by the audit log.
+         ============================================================================ */
+      :root {
+        --bg:          #05070c;
+        --panel:       #0b0f17;
+        --panel-2:     #111621;
+        --panel-3:     #171d2a;
+        --line:        rgba(148, 163, 194, 0.09);
+        --line-strong: rgba(148, 163, 194, 0.17);
+        --text:        #e4e9f3;
+        --text-2:      #98a2b6;
+        --text-3:      #5c667b;
+        --cyan:        #7ee8f5;
+        --green:       #4fd69c;
+        --gold:        #e8b54a;
+        --rose:        #f0647e;
+        --violet:      #a48bff;
+        --steel:       #6f86b0;
+        --font: "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+        --mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+        --radius: 12px;
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      }
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      html, body { height: 100%; overflow: hidden; background: #030203; }
+      html, body { height: 100%; overflow: hidden; }
       body {
-        font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-        color: #e8ecf6;
+        background:
+          radial-gradient(1200px 700px at 18% -10%, rgba(126, 232, 245, 0.05), transparent 60%),
+          radial-gradient(900px 600px at 100% 110%, rgba(164, 139, 255, 0.05), transparent 60%),
+          var(--bg);
+        font-family: var(--font);
+        font-size: 13px;
+        color: var(--text);
         user-select: none;
         cursor: default;
+        -webkit-font-smoothing: antialiased;
       }
-      #stage { position: fixed; inset: 0; display: block; }
+      button { font: inherit; color: inherit; }
+      .num { font-variant-numeric: tabular-nums; }
 
-      /* status word under the orb */
-      #status {
-        position: fixed;
-        left: 0; right: 0;
-        bottom: 11%;
-        text-align: center;
-        font-size: clamp(13px, 2.1vw, 18px);
-        letter-spacing: 0.42em;
-        text-transform: uppercase;
-        color: rgba(226, 214, 216, 0.78);
-        text-shadow: 0 0 22px rgba(210, 40, 60, 0.45);
-        pointer-events: none;
-        transition: color 0.4s;
-        z-index: 3;
+      .app {
+        height: 100%;
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 10px;
+        padding: 10px;
       }
-      #status.paused { color: rgba(150, 165, 190, 0.7); text-shadow: 0 0 18px rgba(90,120,170,.3); }
 
-      /* top-right controls */
-      #controls {
-        position: fixed; top: 14px; right: 16px;
-        display: flex; gap: 10px; align-items: center;
-        z-index: 5;
+      /* ── top bar ─────────────────────────────────────────────────────────── */
+      .topbar {
+        display: flex; align-items: center; gap: 14px;
+        height: 54px; padding: 0 12px 0 16px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
       }
-      .btn {
-        font: inherit; font-size: 12.5px; letter-spacing: .08em;
-        color: rgba(220, 228, 245, 0.7);
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.12);
-        padding: 6px 13px; border-radius: 999px; cursor: pointer;
-        backdrop-filter: blur(6px);
-        transition: all .2s;
-      }
-      .btn:hover { color: #fff; border-color: rgba(206, 40, 60, 0.7); background: rgba(206,40,60,0.14); }
-
-      /* guide drawer */
-      #guide {
-        position: fixed; top: 0; right: 0; bottom: 0;
-        width: min(440px, 86vw);
-        background: rgba(10, 6, 8, 0.9);
-        backdrop-filter: blur(14px);
-        border-left: 1px solid rgba(206, 40, 60, 0.2);
-        transform: translateX(100%);
-        transition: transform .32s cubic-bezier(.4,0,.2,1);
-        z-index: 6;
-        display: flex; flex-direction: column;
-      }
-      #guide.open { transform: translateX(0); }
-      #guide header {
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 18px 18px 12px 22px; border-bottom: 1px solid rgba(255,255,255,0.07);
-      }
-      #guide h2 {
-        font-size: 14px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase;
-        color: rgba(226, 214, 216, 0.85);
-      }
-      #closeGuide {
-        font: inherit; font-size: 22px; line-height: 1; cursor: pointer;
-        color: rgba(226,214,216,0.6); background: none; border: none; padding: 2px 10px;
-        border-radius: 8px;
-      }
-      #closeGuide:hover { color: #fff; background: rgba(206,40,60,0.18); }
-      #guidebody { flex: 1; overflow-y: auto; padding: 18px 22px 28px; }
-      #guidebody::-webkit-scrollbar { width: 8px; }
-      #guidebody::-webkit-scrollbar-thumb { background: rgba(206,40,60,0.25); border-radius: 8px; }
-      .lead { font-size: 15.5px; line-height: 1.55; color: rgba(230,224,224,0.9); margin-bottom: 6px; }
-      .lead b { color: #f0a2ac; }
-      #guidebody section { margin-top: 22px; }
-      #guidebody h3 {
-        font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
-        color: rgba(206,120,138,0.9); margin-bottom: 10px;
+      .brand { display: flex; align-items: center; gap: 9px; flex: none; }
+      .brand svg { width: 26px; height: 26px; display: block; }
+      .brand b { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+      .vsep { width: 1px; height: 26px; background: var(--line-strong); flex: none; }
+      .picker { display: flex; flex-direction: column; line-height: 1.25; flex: none; }
+      .picker small { font-size: 10.5px; color: var(--text-3); }
+      .picker span { font-size: 12.5px; font-weight: 600; color: var(--text); }
+      .search {
+        flex: 0 1 300px; min-width: 150px;
         display: flex; align-items: center; gap: 8px;
+        height: 34px; padding: 0 12px;
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        color: var(--text-3);
       }
-      .tag {
-        font-family: ui-sans-serif, system-ui, sans-serif; font-size: 9.5px; font-weight: 600;
-        letter-spacing: .06em; text-transform: none; color: #f0c674;
-        border: 1px solid rgba(240,198,116,.4); border-radius: 999px; padding: 2px 8px;
+      .search:focus-within { border-color: rgba(126, 232, 245, 0.4); }
+      .search input {
+        flex: 1; min-width: 0; background: none; border: none; outline: none;
+        font: inherit; font-size: 12.5px; color: var(--text);
       }
-      .cmd {
-        font-size: 14.5px; color: #eae2e2; line-height: 1.4;
-        padding: 8px 12px; margin-bottom: 6px; border-radius: 9px;
-        background: rgba(206,40,60,0.07); border: 1px solid rgba(206,40,60,0.14);
-      }
-      .note { font-size: 13px; line-height: 1.5; color: rgba(200,192,196,0.72); margin-top: 8px; }
-      .note b { color: #f0a2ac; font-weight: 600; }
-      .legend { list-style: none; }
-      .legend li { display: flex; align-items: center; gap: 11px; font-size: 13.5px; color: rgba(215,208,210,0.85); padding: 5px 0; }
-      .d { width: 11px; height: 11px; border-radius: 50%; flex: none; box-shadow: 0 0 10px currentColor; }
-      .d-idle   { background: #7a3c50; color: #7a3c50; }
-      .d-listen { background: #ece4e0; color: #ece4e0; }
-      .d-act    { background: #ce1c30; color: #ce1c30; }
-      .d-paused { background: #7a8cae; color: #556; box-shadow: none; }
+      .search input::placeholder { color: var(--text-3); }
+      .spacer { flex: 1; }
+      .stat { display: flex; align-items: center; gap: 6px; flex: none; font-size: 12.5px; color: var(--text-2); }
+      .stat b { color: var(--text); font-weight: 600; }
+      .stat i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 
-      /* camera preview HUD (bottom-left), only while gesture control is on */
+      .pill {
+        display: flex; align-items: center; gap: 8px; flex: none;
+        height: 32px; padding: 0 12px;
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        font-size: 12px; color: var(--text-2);
+        max-width: 260px;
+      }
+      .pill span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .live { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
+      .pill[data-mode="listen"] .live { background: #fff; box-shadow: 0 0 12px #fff; animation: blink 0.9s infinite; }
+      .pill[data-mode="think"] .live  { background: var(--violet); box-shadow: 0 0 12px var(--violet); animation: blink 0.6s infinite; }
+      .pill[data-mode="confirm"] .live{ background: var(--gold); box-shadow: 0 0 12px var(--gold); animation: blink 1.2s infinite; }
+      .pill[data-mode="act"] .live    { background: var(--green); box-shadow: 0 0 12px var(--green); }
+      .pill[data-mode="paused"] .live { background: var(--text-3); box-shadow: none; }
+      @keyframes blink { 50% { opacity: 0.35; } }
+
+      .controls { display: flex; gap: 6px; flex: none; }
+      .btn {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 32px; padding: 0 12px;
+        background: transparent;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        font-size: 12px; color: var(--text-2);
+        cursor: pointer;
+        transition: background .15s, color .15s, border-color .15s;
+      }
+      .btn:hover { color: var(--text); background: var(--panel-3); }
+      .btn svg { width: 14px; height: 14px; flex: none; color: var(--text-3); transition: color .15s; }
+      .btn.on { color: var(--text); border-color: rgba(126, 232, 245, 0.35); background: rgba(126, 232, 245, 0.06); }
+      .btn.on svg { color: var(--cyan); filter: drop-shadow(0 0 4px rgba(126, 232, 245, 0.6)); }
+      .btn.round { width: 32px; padding: 0; justify-content: center; border-radius: 50%; font-weight: 700; }
+      #logBtn { display: none; }
+
+      /* ── workspace ───────────────────────────────────────────────────────── */
+      .workspace {
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 330px;
+        gap: 10px;
+      }
+      .panel {
+        position: relative; min-height: 0;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        overflow: hidden;
+      }
+
+      /* network panel */
+      .net { display: grid; grid-template-rows: auto 1fr auto; }
+      .phead {
+        display: flex; align-items: center; gap: 12px;
+        padding: 12px 14px 0;
+        position: relative; z-index: 2;
+      }
+      .seg {
+        display: inline-flex; padding: 3px; gap: 2px;
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+      }
+      .seg button {
+        border: none; background: transparent; cursor: pointer;
+        padding: 5px 13px; border-radius: 6px;
+        font-size: 12px; color: var(--text-2);
+      }
+      .seg button.active { background: var(--panel-3); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-strong); }
+      .legend { display: flex; gap: 4px; flex-wrap: wrap; }
+      .chip {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 4px 9px; border-radius: 999px;
+        border: 1px solid transparent; background: transparent; cursor: pointer;
+        font-size: 11.5px; color: var(--text-2);
+        transition: opacity .15s, border-color .15s;
+      }
+      .chip:hover { border-color: var(--line-strong); }
+      .chip.off { opacity: 0.35; }
+      .chip i { width: 8px; height: 8px; border-radius: 50%; }
+      .zoom { margin-left: auto; display: flex; gap: 6px; }
+      .heatmode .legend, .heatmode .zoom { visibility: hidden; }
+      .zoom button {
+        width: 28px; height: 28px; border-radius: 50%;
+        border: 1px solid var(--line-strong); background: var(--panel-2);
+        color: var(--text-2); font-size: 15px; line-height: 1; cursor: pointer;
+      }
+      .zoom button:hover { color: var(--text); background: var(--panel-3); }
+
+      .stage-wrap { position: relative; min-height: 0; }
+      #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+      #stage.dragging { cursor: grabbing; }
+      #stage.hovering { cursor: pointer; }
+
+      #tip {
+        position: absolute; z-index: 4; pointer-events: none;
+        width: 230px; padding: 10px 12px;
+        background: rgba(17, 22, 33, 0.96);
+        border: 1px solid var(--line-strong);
+        border-radius: 10px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+        opacity: 0; transform: translateY(4px);
+        transition: opacity .12s, transform .12s;
+      }
+      #tip.show { opacity: 1; transform: none; }
+      #tip .t1 { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 12.5px; }
+      #tip .t2 { font-family: var(--mono); font-size: 10.5px; color: var(--text-3); margin-top: 2px; }
+      #tip p { font-size: 11.5px; line-height: 1.45; color: var(--text-2); margin-top: 7px; }
+      #tip .t3 { display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: var(--text-3); }
+
+      #filterChip {
+        position: absolute; top: 10px; left: 14px; z-index: 3;
+        display: none; align-items: center; gap: 8px;
+        padding: 5px 6px 5px 11px; border-radius: 999px;
+        background: var(--panel-2); border: 1px solid rgba(126, 232, 245, 0.3);
+        font-size: 11.5px; color: var(--text);
+      }
+      #filterChip.show { display: inline-flex; }
+      #filterChip button {
+        width: 18px; height: 18px; border-radius: 50%; border: none; cursor: pointer;
+        background: var(--panel-3); color: var(--text-2); line-height: 1;
+      }
+
+      /* heatmap view */
+      #heat {
+        position: absolute; inset: 0; z-index: 2;
+        padding: 26px 26px 18px;
+        background: var(--panel);
+        display: none; flex-direction: column; gap: 16px;
+        overflow: auto;
+      }
+      #heat.show { display: flex; }
+      .heat-title { font-size: 12px; color: var(--text-2); }
+      .heat-title b { color: var(--text); font-weight: 600; font-size: 13px; margin-right: 8px; }
+      .heatgrid {
+        display: grid;
+        grid-template-columns: 44px repeat(24, minmax(0, 1fr));
+        gap: 3px;
+        font-size: 10px; color: var(--text-3);
+      }
+      .heatgrid .cell { aspect-ratio: 1; border-radius: 3px; background: var(--panel-2); min-height: 10px; }
+      .heatgrid .rl { display: flex; align-items: center; }
+      .heatgrid .cl { text-align: center; padding-top: 2px; }
+      .heat-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+      .kpi {
+        padding: 12px 14px; border-radius: 10px;
+        background: var(--panel-2); border: 1px solid var(--line);
+      }
+      .kpi small { display: block; font-size: 11px; color: var(--text-3); }
+      .kpi b { display: block; margin-top: 4px; font-size: 20px; font-weight: 600; }
+
+      /* camera HUD (bottom-left of the canvas), only while gesture is on */
       #camhud {
-        position: fixed; left: 16px; bottom: 16px; z-index: 5;
-        width: 168px; border-radius: 12px; overflow: hidden;
-        border: 1px solid rgba(206,40,60,0.35);
-        box-shadow: 0 0 26px rgba(206,28,48,0.28);
-        background: rgba(8,4,6,0.6); backdrop-filter: blur(6px);
+        position: absolute; left: 14px; bottom: 12px; z-index: 3;
+        width: 176px; border-radius: 10px; overflow: hidden;
+        background: var(--panel-2);
+        border: 1px solid var(--line-strong);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
       }
       #cam {
-        display: block; width: 100%; height: 118px; object-fit: cover;
+        display: block; width: 100%; height: 116px; object-fit: cover;
         transform: scaleX(-1); /* mirror — feels natural */
         background: #000;
       }
       #camlabel {
-        font-family: ui-sans-serif, system-ui, sans-serif;
-        font-size: 11px; letter-spacing: .04em; text-align: center;
-        color: rgba(226,214,216,0.82); padding: 5px 6px;
-        border-top: 1px solid rgba(206,40,60,0.18);
+        display: flex; align-items: center; gap: 7px;
+        font-size: 11px; color: var(--text-2);
+        padding: 6px 9px; border-top: 1px solid var(--line);
       }
-      #camlabel.err { color: #f0a2ac; }
+      #camlabel::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+      #camlabel.err { color: var(--rose); }
+      #camlabel.err::before { background: var(--rose); box-shadow: 0 0 8px var(--rose); }
+
+      /* timeline */
+      .timeline {
+        display: flex; align-items: center; gap: 12px;
+        padding: 10px 14px 12px;
+        border-top: 1px solid var(--line);
+        position: relative; z-index: 2;
+        background: var(--panel);
+      }
+      .tl-label { position: absolute; top: -26px; left: 14px; font-size: 11px; color: var(--text-3); }
+      .daybox {
+        display: flex; flex-direction: column; line-height: 1.2; flex: none;
+        padding: 5px 10px; min-width: 78px;
+        background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+      }
+      .daybox small { font-size: 10px; color: var(--text-3); }
+      .daybox span { font-size: 12.5px; font-weight: 600; }
+      .arrows { display: flex; gap: 4px; flex: none; }
+      .arrows button {
+        width: 26px; height: 26px; border-radius: 7px; cursor: pointer;
+        border: 1px solid var(--line-strong); background: transparent; color: var(--text-2);
+      }
+      .arrows button:hover:not(:disabled) { background: var(--panel-3); color: var(--text); }
+      .arrows button:disabled { opacity: 0.3; cursor: default; }
+      .track { position: relative; flex: 1; height: 34px; min-width: 0; }
+      .track .ticks { position: absolute; left: 0; right: 0; top: 4px; height: 10px; }
+      .track .tick { position: absolute; top: 0; width: 1px; height: 6px; background: var(--line-strong); }
+      .track .tick.major { height: 10px; background: rgba(148, 163, 194, 0.3); }
+      .track .hl { position: absolute; top: 18px; transform: translateX(-50%); font-size: 10px; color: var(--text-3); }
+      .track .base { position: absolute; left: 0; right: 0; top: 14px; height: 1px; background: var(--line-strong); }
+      .track .ev {
+        position: absolute; top: 10px; width: 9px; height: 9px; margin-left: -4.5px;
+        border-radius: 50%; border: 2px solid var(--panel);
+      }
+      .track .now { position: absolute; top: -16px; bottom: 4px; width: 1px; background: rgba(126, 232, 245, 0.55); }
+      .track .now span {
+        position: absolute; top: -4px; left: 50%; transform: translate(-50%, -100%);
+        padding: 2px 7px; border-radius: 6px;
+        background: var(--panel-3); border: 1px solid var(--line-strong);
+        font-size: 10.5px; color: var(--text); white-space: nowrap;
+      }
+
+      /* ── sidebar (command log) ───────────────────────────────────────────── */
+      .side { display: flex; flex-direction: column; }
+      .side header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 14px 14px 10px;
+      }
+      .side h2 { font-size: 13.5px; font-weight: 600; }
+      .side .seg button { padding: 4px 10px; font-size: 11.5px; }
+      .cols {
+        display: grid; grid-template-columns: 26px 1fr auto; gap: 8px;
+        padding: 6px 14px; font-size: 10.5px; color: var(--text-3);
+        border-bottom: 1px solid var(--line);
+      }
+      #list { flex: 1; overflow-y: auto; padding: 4px 6px 10px; }
+      #list::-webkit-scrollbar { width: 8px; }
+      #list::-webkit-scrollbar-thumb { background: var(--panel-3); border-radius: 8px; }
+      .row {
+        display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px; align-items: center;
+        padding: 7px 8px; border-radius: 8px;
+      }
+      .row:hover { background: var(--panel-2); }
+      .row .idx { font-size: 11px; color: var(--text-3); }
+      .row .main { min-width: 0; }
+      .row .main div { font-size: 12.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .row .main small { display: block; font-family: var(--mono); font-size: 10.5px; color: var(--text-3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .row .meta { text-align: right; }
+      .row .meta small { display: block; font-size: 10.5px; color: var(--text-3); }
+      .res { font-size: 11px; font-weight: 600; white-space: nowrap; }
+      .res.ok   { color: var(--green); }
+      .res.warn { color: var(--gold); }
+      .res.bad  { color: var(--rose); }
+      .res.info { color: var(--text-2); }
+      .bar { height: 3px; border-radius: 3px; background: var(--panel-3); margin-top: 5px; overflow: hidden; }
+      .bar i { display: block; height: 100%; border-radius: 3px; }
+      .empty { padding: 30px 18px; text-align: center; font-size: 12px; line-height: 1.6; color: var(--text-3); }
+      .empty b { color: var(--text-2); font-weight: 600; }
+
+      /* ── guide drawer ────────────────────────────────────────────────────── */
+      #scrim {
+        position: fixed; inset: 0; z-index: 8;
+        background: rgba(2, 4, 8, 0.5);
+        opacity: 0; pointer-events: none; transition: opacity .25s;
+      }
+      #scrim.show { opacity: 1; pointer-events: auto; }
+      #guide {
+        position: fixed; top: 10px; right: 10px; bottom: 10px; z-index: 9;
+        width: min(420px, calc(100vw - 20px));
+        background: var(--panel);
+        border: 1px solid var(--line-strong);
+        border-radius: var(--radius);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+        transform: translateX(calc(100% + 20px));
+        transition: transform .32s var(--ease);
+        display: flex; flex-direction: column;
+      }
+      #guide.open { transform: none; }
+      #guide header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 16px 14px 12px 20px; border-bottom: 1px solid var(--line);
+      }
+      #guide h2 { font-size: 14px; font-weight: 600; }
+      #closeGuide {
+        width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+        border: 1px solid var(--line-strong); background: transparent;
+        color: var(--text-2); font-size: 16px; line-height: 1;
+      }
+      #closeGuide:hover { color: var(--text); background: var(--panel-3); }
+      #guidebody { flex: 1; overflow-y: auto; padding: 16px 20px 26px; }
+      #guidebody::-webkit-scrollbar { width: 8px; }
+      #guidebody::-webkit-scrollbar-thumb { background: var(--panel-3); border-radius: 8px; }
+      .lead { font-size: 14px; line-height: 1.55; color: var(--text); }
+      .lead b, .note b { color: var(--cyan); font-weight: 600; }
+      #guidebody section { margin-top: 20px; }
+      #guidebody h3 {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+        color: var(--text-3); margin-bottom: 8px;
+      }
+      .tag {
+        font-size: 10px; font-weight: 600; letter-spacing: .02em; text-transform: none;
+        border-radius: 999px; padding: 2px 8px;
+        color: var(--gold); border: 1px solid rgba(232, 181, 74, 0.4);
+      }
+      .tag.cam { color: var(--cyan); border-color: rgba(126, 232, 245, 0.4); }
+      .cmd {
+        font-size: 13px; line-height: 1.4; color: var(--text);
+        padding: 8px 11px; margin-bottom: 5px; border-radius: 8px;
+        background: var(--panel-2); border: 1px solid var(--line);
+      }
+      .note { font-size: 12.5px; line-height: 1.55; color: var(--text-2); margin-top: 8px; }
+      .keys { list-style: none; }
+      .keys li { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--text-2); padding: 4px 0; }
+      .keys b { color: var(--text); font-weight: 600; }
+      .d { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+
+      /* ── narrow windows: log becomes a drawer ────────────────────────────── */
+      @media (max-width: 980px) {
+        .picker, .stat, .vsep.opt { display: none; }
+      }
+      @media (max-width: 860px) {
+        .workspace { grid-template-columns: minmax(0, 1fr); }
+        .side {
+          position: fixed; top: 74px; right: 10px; bottom: 10px; z-index: 7;
+          width: min(330px, calc(100vw - 20px));
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+          transform: translateX(calc(100% + 20px)); transition: transform .3s var(--ease);
+        }
+        .side.open { transform: none; }
+        #logBtn { display: inline-flex; }
+        .legend, .pill { display: none; }
+      }
+      @media (max-width: 640px) {
+        .search { display: none; }
+        .btn .lbl { display: none; }
+        .btn { padding: 0 10px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * { transition: none !important; animation: none !important; }
+      }
     </style>
   </head>
   <body>
-    <canvas id="stage"></canvas>
-    <div id="status">awakening</div>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <defs>
+              <radialGradient id="bg" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#7ee8f5" stop-opacity=".9" />
+                <stop offset="100%" stop-color="#7ee8f5" stop-opacity="0" />
+              </radialGradient>
+            </defs>
+            <circle cx="16" cy="16" r="15" fill="url(#bg)" opacity=".35" />
+            <circle cx="16" cy="16" r="11" fill="none" stroke="#e4e9f3" stroke-width="2" />
+            <circle cx="16" cy="16" r="4.5" fill="#7ee8f5" />
+          </svg>
+          <b>nyxa</b>
+        </div>
+        <div class="vsep opt"></div>
+        <div class="picker">
+          <small>Wake word</small>
+          <span>Hey Jarvis · 3 claps</span>
+        </div>
+        <label class="search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+          <input id="search" type="text" placeholder="Search commands or actions" autocomplete="off" spellcheck="false" />
+        </label>
+        <div class="spacer"></div>
+        <div class="stat"><i style="background: var(--green)"></i><b class="num" id="statToday">0</b> today</div>
+        <div class="stat"><i style="background: var(--cyan); border-radius: 50%"></i><b class="num" id="statRate">—</b> handled</div>
+        <div class="pill" id="statusPill" data-mode="idle"><i class="live"></i><span id="status">awakening</span></div>
+        <div class="controls">
+          <button class="btn" id="logBtn" title="Command log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="lbl">Log</span></button>
+          <button class="btn" id="gestureBtn" title="Hand-gesture control"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg><span class="lbl">Gesture</span></button>
+          <button class="btn" id="musicBtn" title="Ambient music"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span class="lbl">Music</span></button>
+          <button class="btn" id="pause" title="Pause / resume listening"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg><span class="lbl">Pause</span></button>
+          <button class="btn round" id="guideBtn" title="How to use Nyxa">?</button>
+        </div>
+      </header>
 
-    <div id="controls">
-      <button class="btn" id="gestureBtn">Gesture: off</button>
-      <button class="btn" id="pause">Pause</button>
-      <button class="btn" id="musicBtn">Music: on</button>
-      <button class="btn" id="guideBtn">How to use</button>
+      <main class="workspace">
+        <section class="panel net">
+          <div class="phead">
+            <div class="seg" id="viewSeg">
+              <button class="active" data-view="network">Network</button>
+              <button data-view="heat">Heatmap</button>
+            </div>
+            <div class="legend" id="legend">
+              <button class="chip" data-tier="safe-auto"><i style="background: var(--green)"></i>Runs instantly</button>
+              <button class="chip" data-tier="needs-confirm"><i style="background: var(--gold)"></i>Asks first</button>
+              <button class="chip" data-tier="deny-by-default"><i style="background: var(--rose)"></i>Needs a click</button>
+            </div>
+            <div class="zoom">
+              <button id="zoomIn" title="Zoom in">+</button>
+              <button id="zoomOut" title="Zoom out">&minus;</button>
+            </div>
+          </div>
+
+          <div class="stage-wrap" id="stageWrap">
+            <canvas id="stage"></canvas>
+            <div id="filterChip"><span id="filterText"></span><button id="clearFilter" title="Clear filter">&times;</button></div>
+            <div id="tip"></div>
+            <div id="heat"></div>
+            <!-- Live camera preview + hand readout, shown only while gesture is on. -->
+            <div id="camhud" hidden>
+              <video id="cam" playsinline muted></video>
+              <div id="camlabel">starting camera…</div>
+            </div>
+          </div>
+
+          <footer class="timeline">
+            <div class="tl-label">Timeline</div>
+            <div class="daybox"><small>Day</small><span id="dayLabel">Today</span></div>
+            <div class="arrows">
+              <button id="dayPrev" title="Previous day">&lsaquo;</button>
+              <button id="dayNext" title="Next day">&rsaquo;</button>
+            </div>
+            <div class="track" id="track"></div>
+          </footer>
+        </section>
+
+        <aside class="panel side" id="side">
+          <header>
+            <h2 id="sideTitle">Command log</h2>
+            <div class="seg" id="sideSeg">
+              <button class="active" data-side="log">Recent</button>
+              <button data-side="top">Top actions</button>
+            </div>
+          </header>
+          <div class="cols" id="cols"><span>#</span><span>Command</span><span>Result</span></div>
+          <div id="list"></div>
+        </aside>
+      </main>
     </div>
 
-    <!-- Live camera preview + hand readout, shown only while gesture is on. -->
-    <div id="camhud" hidden>
-      <video id="cam" playsinline muted></video>
-      <div id="camlabel">starting camera…</div>
-    </div>
-
+    <div id="scrim"></div>
     <aside id="guide">
       <header>
         <h2>How to use Nyxa</h2>
         <button id="closeGuide" title="Back to Nyxa">&times;</button>
       </header>
       <div id="guidebody">
-        <p class="lead">Wake me by <b>clapping three times</b> (or saying <b>&ldquo;Hey Jarvis&rdquo;</b> for now) &mdash; wait for the orb to brighten, then say what you want.</p>
+        <p class="lead">Wake me by <b>clapping three times</b> (or saying <b>&ldquo;Hey Jarvis&rdquo;</b> for now) &mdash; wait for the core to light up, then say what you want.</p>
         <p class="note">A <b>&ldquo;Hey Nyxa&rdquo;</b> voice wake is coming soon; for now, clapping is your quickest way in.</p>
 
         <section>
@@ -184,343 +560,501 @@
         </section>
 
         <section>
-          <h3>Move it with your hands <span class="tag">camera</span></h3>
-          <p class="note">Click <b>Gesture</b> (top-right) to turn on hand control. A small camera preview appears bottom-left.</p>
-          <ul class="legend">
-            <li><span class="d d-listen"></span> <b>One hand</b> — move it around and the orb follows</li>
-            <li><span class="d d-act"></span> <b>Two hands</b> — spread apart to zoom in, bring together to zoom out</li>
+          <h3>Move it with your hands <span class="tag cam">camera</span></h3>
+          <p class="note">Click <b>Gesture</b> (top-right) to turn on hand control. A small camera preview appears bottom-left of the network.</p>
+          <ul class="keys">
+            <li><span class="d" style="background: var(--cyan)"></span><span><b>One hand</b> &mdash; move it around and the network follows</span></li>
+            <li><span class="d" style="background: var(--violet)"></span><span><b>Two hands</b> &mdash; spread apart to zoom in, bring together to zoom out</span></li>
           </ul>
-          <p class="note">All on-device — nothing leaves your laptop. Turn it back off to save battery.</p>
+          <p class="note">All on-device &mdash; nothing leaves your laptop. Turn it back off to save battery.</p>
+        </section>
+
+        <section>
+          <h3>Reading the network</h3>
+          <p class="note" style="margin: 0 0 8px">Each dot is something Nyxa can do, grouped by area. Dots grow the more you use them. <b>Hover</b> one for details, <b>click</b> it to filter the log. Drag to pan, scroll to zoom.</p>
+          <ul class="keys">
+            <li><span class="d" style="background: var(--green)"></span><span><b>Green</b> &mdash; runs instantly</span></li>
+            <li><span class="d" style="background: var(--gold)"></span><span><b>Gold</b> &mdash; asks &ldquo;yes or no?&rdquo; first</span></li>
+            <li><span class="d" style="background: var(--rose)"></span><span><b>Rose</b> &mdash; needs an on-screen click</span></li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>Reading the core</h3>
+          <ul class="keys">
+            <li><span class="d" style="background: var(--cyan)"></span><span><b>Slow glow</b> &mdash; waiting for 3 claps or &ldquo;Hey Jarvis&rdquo;</span></li>
+            <li><span class="d" style="background: #fff"></span><span><b>Bright, with rings</b> &mdash; listening to your command</span></li>
+            <li><span class="d" style="background: var(--violet)"></span><span><b>Orbiting arcs</b> &mdash; thinking</span></li>
+            <li><span class="d" style="background: var(--gold)"></span><span><b>Gold ring</b> &mdash; waiting for your yes / no</span></li>
+            <li><span class="d" style="background: var(--green)"></span><span><b>A signal runs out</b> &mdash; doing that action</span></li>
+            <li><span class="d" style="background: var(--text-3)"></span><span><b>Grey &amp; still</b> &mdash; paused</span></li>
+          </ul>
         </section>
 
         <section>
           <h3>Stopping Nyxa</h3>
-          <p class="note">Wake me and say <b>&ldquo;stop&rdquo;</b>, press <b>Ctrl&#8202;+&#8202;Shift&#8202;+&#8202;Alt&#8202;+&#8202;K</b>, or click <b>Pause</b>. It stays in the tray &mdash; reopen from the crimson orb icon.</p>
-        </section>
-
-        <section>
-          <h3>Reading the orb</h3>
-          <ul class="legend">
-            <li><span class="d d-idle"></span> calm &amp; slow &mdash; waiting for 3 claps or &ldquo;Hey Jarvis&rdquo;</li>
-            <li><span class="d d-listen"></span> bright with a ring &mdash; listening to your command</li>
-            <li><span class="d d-act"></span> a crimson flare &mdash; doing it</li>
-            <li><span class="d d-paused"></span> dim &amp; cold &mdash; paused</li>
-          </ul>
+          <p class="note">Wake me and say <b>&ldquo;stop&rdquo;</b>, press <b>Ctrl&#8202;+&#8202;Shift&#8202;+&#8202;Alt&#8202;+&#8202;K</b>, or click <b>Pause</b>. It stays in the tray &mdash; reopen it from the tray icon.</p>
         </section>
       </div>
     </aside>
 
     <script>
-      const invoke = window.__TAURI__.core.invoke;
+      const invoke = window.__TAURI__?.core?.invoke ?? (async () => { throw new Error("tauri unavailable"); });
+      const $ = (id) => document.getElementById(id);
 
-      // ─── The divine energy cluster ─────────────────────────────────────────
-      const canvas = document.getElementById("stage");
-      const ctx = canvas.getContext("2d", { alpha: false });
-      let W = 0, H = 0, DPR = 1, CX = 0, CY = 0, UNIT = 1;
-      // Base (resting) orb centre + scale. Each frame the working CX/CY/UNIT are
-      // derived from these plus the live hand-gesture offset, so the orb can pan
-      // and zoom while the starfield/nebula (tied to W/H) stay fixed behind it.
-      let BCX = 0, BCY = 0, BUNIT = 1;
+      // ─── Action registry (mirrors registry/actions.toml) ───────────────────
+      // Kept in sync by hand: ids here only drive the network drawing. Any
+      // action id that shows up in the audit log but not here still appears in
+      // the command log — it just has no dot.
+      const GROUPS = [
+        { id: "web",    label: "Web" },
+        { id: "media",  label: "Music & media" },
+        { id: "comms",  label: "Messages" },
+        { id: "info",   label: "Briefings" },
+        { id: "apps",   label: "Apps" },
+        { id: "files",  label: "Files" },
+        { id: "system", label: "System" },
+      ];
+      const ACTIONS = [
+        { id: "youtube.search",    g: "web",    tier: "safe-auto",       label: "YouTube search",  desc: "Opens YouTube search results for what you say." },
+        { id: "youtube.play",      g: "web",    tier: "safe-auto",       label: "YouTube play",    desc: "Plays the top YouTube result. The default for a bare “play X”." },
+        { id: "web.search",        g: "web",    tier: "safe-auto",       label: "Google search",   desc: "Opens a Google search for what you say." },
+        { id: "browser.open_site", g: "web",    tier: "safe-auto",       label: "Open website",    desc: "Opens a known website from the reviewed site list." },
+        { id: "web.close",         g: "web",    tier: "needs-confirm",   label: "Close tab",       desc: "Closes the browser tab showing a known site — that tab only." },
+        { id: "spotify.play",      g: "media",  tier: "safe-auto",       label: "Spotify play",    desc: "Finds a song or artist in Spotify and starts it. No API key." },
+        { id: "media.control",     g: "media",  tier: "safe-auto",       label: "Media keys",      desc: "Play / pause, next track, previous track." },
+        { id: "system.volume",     g: "media",  tier: "safe-auto",       label: "Volume",          desc: "Volume up, down, or mute." },
+        { id: "email.draft",       g: "comms",  tier: "safe-auto",       label: "Draft email",     desc: "Opens a prefilled Gmail draft. Never sends on its own." },
+        { id: "message.send",      g: "comms",  tier: "deny-by-default", label: "Send message",    desc: "Sends an email or message — only after you click to approve." },
+        { id: "news.read",         g: "info",   tier: "safe-auto",       label: "Headlines",       desc: "Reads the latest news headlines aloud." },
+        { id: "weather.read",      g: "info",   tier: "safe-auto",       label: "Weather",         desc: "Reads the current weather aloud." },
+        { id: "assistant.update",  g: "info",   tier: "safe-auto",       label: "Status update",   desc: "Speaks RAM, battery, running apps and your latest project." },
+        { id: "app.launch",        g: "apps",   tier: "safe-auto",       label: "Launch app",      desc: "Launches an app from the reviewed allowlist." },
+        { id: "app.close",         g: "apps",   tier: "needs-confirm",   label: "Close app",       desc: "Gracefully closes an app. Never force-kills." },
+        { id: "file.move",         g: "files",  tier: "needs-confirm",   label: "Move file",       desc: "Moves a file inside your user folder. Never overwrites." },
+        { id: "file.rename",       g: "files",  tier: "needs-confirm",   label: "Rename file",     desc: "Renames a file inside your user folder." },
+        { id: "file.delete",       g: "files",  tier: "deny-by-default", label: "Delete file",     desc: "Sends ONE file to the Recycle Bin — only after you click." },
+        { id: "system.sleep",      g: "system", tier: "needs-confirm",   label: "Sleep",           desc: "Puts the computer to sleep." },
+        { id: "system.settings",   g: "system", tier: "deny-by-default", label: "Settings",        desc: "Changes one of a fixed set of system settings." },
+        { id: "pkg.install",       g: "system", tier: "deny-by-default", label: "Install package", desc: "Installs a package via winget, exact id, official source." },
+        { id: "shell.run",         g: "system", tier: "deny-by-default", label: "Shell",           desc: "Runs a shell command. Off by default.", disabled: true },
+      ];
+      const BY_ID = Object.fromEntries(ACTIONS.map((a) => [a.id, a]));
+      const TIER_RGB = { "safe-auto": "79,214,156", "needs-confirm": "232,181,74", "deny-by-default": "240,100,126", off: "92,102,123" };
+      const RGB = { cyan: "126,232,245", violet: "164,139,255", white: "236,242,250", steel: "111,134,176" };
+
+      // ─── Outcome classification (audit-log `outcome` strings) ──────────────
+      function outcomeClass(o) {
+        o = (o || "").toLowerCase();
+        if (o === "executed" || o === "spoke" || o === "approved" || o === "confirmed") return "ok";
+        if (o === "dry_run" || o === "cooldown" || o === "declined" || o.includes("confirm") || o.includes("pending")) return "warn";
+        if (o === "resumed" || o === "") return "info";
+        return "bad";
+      }
+      const OUTCOME_TEXT = {
+        executed: "Done", spoke: "Spoke", dry_run: "Dry run", cooldown: "Cooldown", declined: "Declined",
+        denied: "Denied", deny_blocked: "Blocked", needs_confirm_blocked: "Needs OK", killed: "Killed",
+        exec_error: "Error", not_implemented: "Not built", disabled: "Disabled", halted: "Paused", resumed: "Resumed",
+      };
+      const outcomeText = (o) => OUTCOME_TEXT[o] || (o ? o.replace(/_/g, " ") : "—");
+      const RES_RGB = { ok: "79,214,156", warn: "232,181,74", bad: "240,100,126", info: "152,162,182" };
+
+      // ─── Seeded layout ─────────────────────────────────────────────────────
+      function rng(seed) {
+        return () => {
+          seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+          let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+      const R = rng(7);
+      // World space: core at (0,0), roughly x ∈ ±1.3, y ∈ ±1.
+      const hubs = GROUPS.map((g, i) => {
+        const ang = -Math.PI / 2 + (i / GROUPS.length) * Math.PI * 2 + 0.2;
+        return { ...g, ang, x: Math.cos(ang) * 0.68, y: Math.sin(ang) * 0.56, ph: R() * 6.28 };
+      });
+      const nodes = ACTIONS.map((a) => ({ ...a, count: 0, flash: 0, ph: R() * 6.28 }));
+      for (const h of hubs) {
+        const mine = nodes.filter((n) => n.g === h.id);
+        mine.forEach((n, i) => {
+          const spread = 0.62;
+          const ang = h.ang + (i - (mine.length - 1) / 2) * spread + (R() - 0.5) * 0.18;
+          const d = 0.21 + R() * 0.08;
+          n.x = h.x + Math.cos(ang) * d * 1.15;
+          n.y = h.y + Math.sin(ang) * d;
+          n.hub = h;
+        });
+      }
+      // Relax the layout so labels don't collide. Labels are wide and short,
+      // so distance is measured in a stretched space (≈ one label box).
+      {
+        const movable = nodes, fixed = [...hubs, { x: 0, y: 0 }];
+        const hubLabels = hubs.map((h) => ({ x: h.x, y: h.y - 0.06 }));
+        const push = (a, b, wx, wy, moveB) => {
+          const dx = a.x - b.x, dy = a.y - b.y;
+          const d = Math.hypot(dx / wx, dy / wy);
+          if (d >= 1) return;
+          const k = (1 - d) * 0.5 / Math.max(d, 0.01);
+          a.x += dx * k * (moveB ? 0.5 : 1); a.y += dy * k * (moveB ? 0.5 : 1);
+          if (moveB) { b.x -= dx * k * 0.5; b.y -= dy * k * 0.5; }
+        };
+        for (let it = 0; it < 240; it++) {
+          for (let i = 0; i < movable.length; i++) {
+            for (let j = i + 1; j < movable.length; j++) push(movable[i], movable[j], 0.30, 0.13, true);
+            for (const f of fixed) push(movable[i], f, 0.24, 0.16, false);
+            for (const f of hubLabels) push(movable[i], f, 0.36, 0.12, false);
+          }
+          for (const n of movable) { // spring back toward its hub
+            const dx = n.x - n.hub.x, dy = n.y - n.hub.y, d = Math.hypot(dx, dy) || 1;
+            n.x += (n.hub.x + (dx / d) * 0.25 - n.x) * 0.03;
+            n.y += (n.hub.y + (dy / d) * 0.22 - n.y) * 0.03;
+          }
+        }
+      }
+      // Decorative "dust": small satellites that make the network feel dense.
+      const dust = [];
+      for (let i = 0; i < 90; i++) {
+        const ang = R() * Math.PI * 2, rad = 0.18 + Math.pow(R(), 0.8) * 1.0;
+        const x = Math.cos(ang) * rad * 1.3, y = Math.sin(ang) * rad * 0.92;
+        let near = nodes[0], best = Infinity;
+        for (const n of nodes) { const d = (n.x - x) ** 2 + (n.y - y) ** 2; if (d < best) { best = d; near = n; } }
+        const pick = R();
+        dust.push({
+          x, y, near, link: R() < 0.55 && best < 0.12, r: 0.8 + R() * 1.8, ph: R() * 6.28,
+          rgb: pick < 0.3 ? RGB.steel : pick < 0.5 ? RGB.violet : pick < 0.65 ? RGB.cyan : TIER_RGB[near.disabled ? "off" : near.tier],
+        });
+      }
+      // A few faint cross-links between actions in different groups.
+      const cross = [];
+      for (let i = 0; i < 9; i++) {
+        const a = nodes[(R() * nodes.length) | 0], b = nodes[(R() * nodes.length) | 0];
+        if (a.g !== b.g) cross.push([a, b]);
+      }
+
+      // ─── Canvas + view transform ───────────────────────────────────────────
+      const canvas = $("stage");
+      const ctx = canvas.getContext("2d");
+      const wrap = $("stageWrap");
+      let W = 0, H = 0, DPR = 1;
+      const view = { zoom: 1, tzoom: 1, px: 0, py: 0 };
+
+      // Hand-gesture control (targets set by the MediaPipe module below).
+      // gx/gy in [-1,1] pan the network; gs is the zoom multiplier. Targets are
+      // eased toward each frame so motion is smooth and jitter-free.
+      const Gesture = { gx: 0, gy: 0, gs: 1, tx: 0, ty: 0, ts: 1, active: false, hands: 0 };
+      window.NyxaGesture = Gesture;
 
       function resize() {
         DPR = Math.min(window.devicePixelRatio || 1, 2);
-        W = canvas.width = Math.floor(innerWidth * DPR);
-        H = canvas.height = Math.floor(innerHeight * DPR);
-        canvas.style.width = innerWidth + "px";
-        canvas.style.height = innerHeight + "px";
-        BCX = W / 2; BCY = H * 0.44;
-        BUNIT = Math.min(W, H) / 2; // orb scale
-        CX = BCX; CY = BCY; UNIT = BUNIT;
-        initStars();
+        const r = wrap.getBoundingClientRect();
+        W = canvas.width = Math.max(1, Math.floor(r.width * DPR));
+        H = canvas.height = Math.max(1, Math.floor(r.height * DPR));
       }
-
-      // ─── Hand-gesture control (targets set by the MediaPipe module below) ────
-      // gx/gy in [-1,1] pan the orb; gs is the zoom multiplier. Targets are eased
-      // toward each frame so motion is smooth and jitter-free. Exposed on window
-      // so the ES-module hand tracker can write to it.
-      const Gesture = {
-        gx: 0, gy: 0, gs: 1,          // smoothed (what the orb uses)
-        tx: 0, ty: 0, ts: 1,          // targets (set from detected hands)
-        active: false,                 // camera on?
-        hands: 0,                      // last-seen hand count (for the HUD)
-      };
-      window.NyxaGesture = Gesture;
-
-      // Faint drifting starfield for depth behind the orb.
-      let stars = [];
-      function initStars() {
-        stars = [];
-        const n = Math.max(70, Math.round((W * H) / (16000 * DPR)));
-        for (let i = 0; i < n; i++) {
-          const t = Math.random();
-          stars.push({
-            x: Math.random() * W,
-            y: Math.random() * H,
-            r: (0.4 + Math.random() * 1.2) * DPR,
-            tw: Math.random() * Math.PI * 2,
-            sp: 0.4 + Math.random() * 0.9,
-            drift: (0.006 + Math.random() * 0.02) * DPR,
-            // mostly ashen white, a few crimson/violet embers
-            hue: t < 0.12 ? "210,90,110" : t < 0.24 ? "150,130,200" : "214,208,214",
-          });
-        }
-      }
-
-      window.addEventListener("resize", resize);
+      new ResizeObserver(resize).observe(wrap);
       resize();
 
-      // Pre-rendered soft glow sprite (cheap to draw hundreds of times).
+      let S = 1, OX = 0, OY = 0;
+      function updateTransform() {
+        Gesture.gx += (Gesture.tx - Gesture.gx) * 0.15;
+        Gesture.gy += (Gesture.ty - Gesture.gy) * 0.15;
+        Gesture.gs += (Gesture.ts - Gesture.gs) * 0.12;
+        view.zoom += (view.tzoom - view.zoom) * 0.18;
+        S = Math.min(W / 3.0, H / 2.35) * view.zoom * Gesture.gs;
+        OX = W / 2 + view.px * DPR + Gesture.gx * W * 0.3;
+        OY = H * 0.5 + view.py * DPR + Gesture.gy * H * 0.28;
+      }
+      const sx = (x) => OX + x * S;
+      const sy = (y) => OY + y * S;
+
       function makeGlow(rgb) {
         const s = 64, c = document.createElement("canvas");
         c.width = c.height = s;
         const g = c.getContext("2d");
-        const grd = g.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2);
+        const grd = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
         grd.addColorStop(0, `rgba(${rgb},1)`);
-        grd.addColorStop(0.25, `rgba(${rgb},0.55)`);
+        grd.addColorStop(0.3, `rgba(${rgb},0.35)`);
         grd.addColorStop(1, `rgba(${rgb},0)`);
         g.fillStyle = grd; g.fillRect(0, 0, s, s);
         return c;
       }
-      // Gothic palette: bone-white, blood crimson, ember, deep violet, cold steel.
-      const PAL = {
-        bone:   makeGlow("236,228,224"),
-        blood:  makeGlow("206,28,48"),
-        ember:  makeGlow("255,86,52"),
-        violet: makeGlow("140,58,180"),
-        steel:  makeGlow("150,166,196"),
-      };
-      const PAL_PAUSED = makeGlow("120,140,170"); // dead, cold
-
-      // Particle cloud: layered orbits with radial breathing + swirl.
-      const N = 640;
-      const parts = [];
-      for (let i = 0; i < N; i++) {
-        const layer = Math.random();               // 0 inner .. 1 outer
-        parts.push({
-          a: Math.random() * Math.PI * 2,
-          baseR: (0.10 + layer * 0.80) * (0.9 + Math.random() * 0.2),
-          spd: (0.12 + (1 - layer) * 0.5) * (0.6 + Math.random() * 0.8),
-          osc: 0.02 + Math.random() * 0.07,
-          ph: Math.random() * Math.PI * 2,
-          size: (0.5 + Math.random() * 1.6) * (1.2 - layer * 0.5),
-          // crimson/ember heart, bone+blood mid, violet+steel cold outer
-          sprite: layer < 0.30 ? (Math.random() < 0.55 ? PAL.blood : PAL.ember)
-                : layer < 0.68 ? (Math.random() < 0.5 ? PAL.bone : PAL.blood)
-                : (Math.random() < 0.55 ? PAL.violet : PAL.steel),
-          twk: 0.4 + Math.random() * 0.8,
-        });
+      const glowCache = {};
+      const glow = (rgb) => glowCache[rgb] || (glowCache[rgb] = makeGlow(rgb));
+      function sprite(rgb, x, y, size, alpha) {
+        ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+        ctx.drawImage(glow(rgb), x - size / 2, y - size / 2, size, size);
+        ctx.globalAlpha = 1;
+      }
+      function dot(x, y, r, fill) {
+        ctx.fillStyle = fill;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
       }
 
-      // Drifting embers that rise and flicker out — gothic ash.
-      const embers = [];
-      function spawnEmber() {
-        const ang = Math.random() * Math.PI * 2;
-        const r = UNIT * (0.15 + Math.random() * 0.5);
-        embers.push({
-          x: CX + Math.cos(ang) * r,
-          y: CY + Math.sin(ang) * r * 0.9,
-          vy: -(0.15 + Math.random() * 0.4) * UNIT * 0.004,
-          vx: (Math.random() - 0.5) * UNIT * 0.002,
-          life: 0.6 + Math.random() * 0.8,
-          sz: (0.6 + Math.random() * 1.4),
-          sprite: Math.random() < 0.6 ? PAL.ember : PAL.blood,
-        });
-      }
-
-      const ripples = [];   // expanding shock rings on actions
-      const filaments = [];  // jagged spectral flickers from the core
-      function spawnFilament() {
-        const ang = Math.random() * Math.PI * 2;
-        const segs = 5 + (Math.random() * 4 | 0);
-        const pts = [[CX, CY]];
-        let a = ang, r = 0;
-        for (let s = 0; s < segs; s++) {
-          r += UNIT * (0.10 + Math.random() * 0.14);
-          a += (Math.random() - 0.5) * 0.7;
-          pts.push([CX + Math.cos(a) * r, CY + Math.sin(a) * r * 0.9]);
-        }
-        filaments.push({ pts, life: 1, hue: Math.random() < 0.5 ? "206,28,48" : "236,228,224" });
-      }
-
-      // Intensity 0..1 driven by state; smoothly eased toward a target.
-      let intensity = 0.35, targetIntensity = 0.5, paused = false;
+      // ─── Engine state → visuals ────────────────────────────────────────────
+      let intensity = 0.4, targetIntensity = 0.45, paused = false;
       let mode = "idle"; // idle | listen | think | confirm | act | paused
-      let rot = 0, t = 0;
+      let t = 0;
+      const signals = [];   // pulses travelling core → hub → action
+      const ripples = [];   // expanding rings from the core
+      const tierOff = new Set();
+      let filterAction = null, query = "";
+
+      function nodeVisible(n) {
+        if (tierOff.has(n.tier)) return false;
+        if (!query) return true;
+        return (n.id + " " + n.label + " " + n.desc).toLowerCase().includes(query);
+      }
+
+      function fire(id, cls) {
+        const n = nodes.find((m) => m.id === id);
+        if (!n) return;
+        const rgb = RES_RGB[cls] || RGB.cyan;
+        signals.push({ path: [[0, 0], [n.hub.x, n.hub.y], [n.x, n.y]], p: 0, speed: 0.05, rgb, target: n, strong: true });
+        ripples.push({ r: 0.1, life: 1, rgb });
+      }
 
       function draw() {
         t += 0.016;
-
-        // Ease orb pan/zoom toward the hand-gesture targets, then derive the
-        // working centre + scale the whole orb is drawn around this frame.
-        Gesture.gx += (Gesture.tx - Gesture.gx) * 0.15;
-        Gesture.gy += (Gesture.ty - Gesture.gy) * 0.15;
-        Gesture.gs += (Gesture.ts - Gesture.gs) * 0.12;
-        CX = BCX + Gesture.gx * W * 0.34;
-        CY = BCY + Gesture.gy * H * 0.30;
-        UNIT = BUNIT * Gesture.gs;
-
-        intensity += (targetIntensity - intensity) * 0.05;
+        updateTransform();
+        intensity += (targetIntensity - intensity) * 0.06;
         const I = intensity;
-        rot += 0.0012 + I * 0.006;
+        const dpr = DPR;
 
-        // Fade previous frame -> long smoky trails (lower alpha = more ghost).
-        ctx.globalCompositeOperation = "source-over";
-        ctx.fillStyle = "rgba(3,2,3," + (0.10 + (1 - I) * 0.05) + ")";
-        ctx.fillRect(0, 0, W, H);
+        ctx.clearRect(0, 0, W, H);
+        ctx.filter = paused ? "grayscale(1) brightness(0.65)" : "none";
 
-        ctx.globalCompositeOperation = "lighter";
-
-        // Deep nebula haze — gives the void colour + depth.
-        const neb1 = ctx.createRadialGradient(W * 0.22, H * 0.78, 0, W * 0.22, H * 0.78, UNIT * 1.5);
-        neb1.addColorStop(0, "rgba(150,26,52,0.060)");
-        neb1.addColorStop(1, "rgba(0,0,0,0)");
-        ctx.fillStyle = neb1; ctx.fillRect(0, 0, W, H);
-        const neb2 = ctx.createRadialGradient(W * 0.82, H * 0.24, 0, W * 0.82, H * 0.24, UNIT * 1.6);
-        neb2.addColorStop(0, "rgba(88,40,140,0.055)");
-        neb2.addColorStop(1, "rgba(0,0,0,0)");
-        ctx.fillStyle = neb2; ctx.fillRect(0, 0, W, H);
-
-        // Drifting, twinkling stars.
-        for (const s of stars) {
-          s.tw += 0.02 * s.sp;
-          s.y -= s.drift;
-          if (s.y < 0) { s.y = H; s.x = Math.random() * W; }
-          const a = 0.14 + 0.22 * (0.5 + 0.5 * Math.sin(s.tw));
-          ctx.fillStyle = `rgba(${s.hue},${a})`;
-          ctx.fillRect(s.x, s.y, s.r, s.r);
+        // Faint orbit rings.
+        ctx.lineWidth = 1 * dpr;
+        for (const [rr, a] of [[0.36, 0.07], [0.68, 0.06], [1.02, 0.045], [1.36, 0.03]]) {
+          ctx.strokeStyle = `rgba(148,163,194,${a})`;
+          ctx.beginPath(); ctx.ellipse(OX, OY, rr * S * 1.12, rr * S * 0.92, 0, 0, Math.PI * 2); ctx.stroke();
         }
 
-        // Blood aura behind the cluster.
-        const halo = ctx.createRadialGradient(CX, CY, 0, CX, CY, UNIT * (0.95 + I * 0.5));
-        const hue = paused ? "90,120,170" : "150,20,36";
-        halo.addColorStop(0, `rgba(${hue},${0.12 + I * 0.12})`);
-        halo.addColorStop(0.45, `rgba(${hue},${0.04 + I * 0.05})`);
-        halo.addColorStop(1, "rgba(0,0,0,0)");
-        ctx.fillStyle = halo;
-        ctx.fillRect(0, 0, W, H);
-
-        // Particles (drawn before the eclipse carve so the core reads as a void).
-        const swirl = rot;
-        for (let i = 0; i < N; i++) {
-          const p = parts[i];
-          p.a += p.spd * (0.004 + I * 0.010);
-          const wob = 1 + Math.sin(t * (0.6 + p.twk) + p.ph) * p.osc * (0.6 + I);
-          const r = p.baseR * UNIT * wob * (0.82 + I * 0.28);
-          const ang = p.a + swirl * (0.4 + p.baseR);
-          const x = CX + Math.cos(ang) * r;
-          const y = CY + Math.sin(ang) * r * 0.92;
-          const tw = 0.55 + 0.45 * Math.sin(t * (1.7 + p.twk * 3) + p.ph);
-          const sz = p.size * UNIT * 0.03 * (0.7 + I * 0.7);
-          const alpha = (0.32 + I * 0.5) * tw;
-          drawSprite(paused ? PAL_PAUSED : p.sprite, x, y, sz * 3, alpha);
+        // Edges.
+        ctx.lineWidth = 1 * dpr;
+        for (const d of dust) if (d.link) {
+          ctx.strokeStyle = "rgba(148,163,194,0.05)";
+          ctx.beginPath(); ctx.moveTo(sx(d.x), sy(d.y)); ctx.lineTo(sx(d.near.x), sy(d.near.y)); ctx.stroke();
+        }
+        for (const [a, b] of cross) {
+          ctx.strokeStyle = "rgba(148,163,194,0.06)";
+          ctx.beginPath(); ctx.moveTo(sx(a.x), sy(a.y)); ctx.lineTo(sx(b.x), sy(b.y)); ctx.stroke();
+        }
+        for (const h of hubs) {
+          ctx.strokeStyle = `rgba(126,232,245,${0.10 + I * 0.08})`;
+          ctx.beginPath(); ctx.moveTo(OX, OY); ctx.lineTo(sx(h.x), sy(h.y)); ctx.stroke();
+        }
+        for (const n of nodes) {
+          const vis = nodeVisible(n);
+          const sel = filterAction === n.id;
+          ctx.strokeStyle = sel ? `rgba(${TIER_RGB[n.tier]},0.55)` : `rgba(148,163,194,${vis ? 0.16 : 0.05})`;
+          ctx.beginPath(); ctx.moveTo(sx(n.hub.x), sy(n.hub.y)); ctx.lineTo(sx(n.x), sy(n.y)); ctx.stroke();
         }
 
-        // Embers.
-        if (!paused && Math.random() < 0.3 + I * 0.5) spawnEmber();
-        for (let i = embers.length - 1; i >= 0; i--) {
-          const e = embers[i];
-          e.x += e.vx; e.y += e.vy; e.vy -= UNIT * 0.000015;
-          e.life -= 0.012;
-          if (e.life <= 0) { embers.splice(i, 1); continue; }
-          const fl = 0.5 + 0.5 * Math.sin(t * 9 + i);
-          drawSprite(paused ? PAL_PAUSED : e.sprite, e.x, e.y, e.sz * UNIT * 0.05, e.life * fl * 0.7);
+        // Dust.
+        for (const d of dust) {
+          const tw = 0.5 + 0.5 * Math.sin(t * 0.9 + d.ph);
+          dot(sx(d.x), sy(d.y), d.r * dpr * (0.8 + 0.2 * view.zoom), `rgba(${d.rgb},${0.18 + tw * 0.25})`);
         }
 
-        // Pulsing corona + eclipse core (a dark heart rimmed in crimson fire).
-        const beat = 0.5 + 0.5 * Math.sin(t * (1.3 + I * 2.0));
-        const coreR = UNIT * (0.17 + 0.04 * beat + I * 0.06);
-        drawSprite(paused ? PAL_PAUSED : PAL.blood, CX, CY, coreR * 3.2, 0.85);
-        drawSprite(paused ? PAL_PAUSED : PAL.ember, CX, CY, coreR * 2.0, 0.7);
-        drawSprite(PAL.bone, CX, CY, coreR * 1.4, paused ? 0.25 : 0.55);
-        // Carve the dark heart.
-        ctx.globalCompositeOperation = "source-over";
-        const dark = ctx.createRadialGradient(CX, CY, 0, CX, CY, coreR * 1.05);
-        dark.addColorStop(0, "rgba(3,2,3,0.98)");
-        dark.addColorStop(0.62, "rgba(3,2,3,0.92)");
-        dark.addColorStop(1, "rgba(3,2,3,0)");
-        ctx.fillStyle = dark;
-        ctx.fillRect(CX - coreR * 1.2, CY - coreR * 1.2, coreR * 2.4, coreR * 2.4);
-        ctx.globalCompositeOperation = "lighter";
+        // Signals.
+        if (!paused && Math.random() < 0.012 + I * 0.01) {
+          const n = nodes[(Math.random() * nodes.length) | 0];
+          if (!n.disabled) signals.push({ path: [[0, 0], [n.hub.x, n.hub.y], [n.x, n.y]], p: 0, speed: 0.025, rgb: RGB.cyan, target: null });
+        }
+        for (let i = signals.length - 1; i >= 0; i--) {
+          const s = signals[i];
+          s.p += s.speed;
+          const seg = Math.min(s.path.length - 2, Math.floor(s.p));
+          if (s.p >= s.path.length - 1) {
+            if (s.target) s.target.flash = 1;
+            signals.splice(i, 1); continue;
+          }
+          const f = s.p - seg, a = s.path[seg], b = s.path[seg + 1];
+          const x = sx(a[0] + (b[0] - a[0]) * f), y = sy(a[1] + (b[1] - a[1]) * f);
+          sprite(s.rgb, x, y, (s.strong ? 26 : 14) * dpr, s.strong ? 0.95 : 0.5);
+          dot(x, y, (s.strong ? 2.2 : 1.3) * dpr, `rgba(${s.rgb},0.95)`);
+        }
 
-        // ATTENTIVE STATE — while capturing your command, a bright pulsing
-        // double-ring makes "I'm listening to you" unmistakable.
+        // Group hubs.
+        ctx.textAlign = "center";
+        for (const h of hubs) {
+          const x = sx(h.x), y = sy(h.y) + Math.sin(t * 0.6 + h.ph) * 1.5 * dpr;
+          sprite(RGB.violet, x, y, 26 * dpr, 0.35);
+          ctx.lineWidth = 1.5 * dpr;
+          ctx.strokeStyle = "rgba(164,139,255,0.75)";
+          ctx.fillStyle = "#0b0f17";
+          ctx.beginPath(); ctx.arc(x, y, 5 * dpr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+          ctx.font = `600 ${10.5 * dpr}px "Segoe UI", system-ui, sans-serif`;
+          ctx.fillStyle = "rgba(196,204,222,0.85)";
+          ctx.fillText(h.label.toUpperCase(), x, y - 11 * dpr);
+        }
+
+        // Action nodes.
+        for (const n of nodes) {
+          const vis = nodeVisible(n);
+          const rgb = TIER_RGB[n.disabled ? "off" : n.tier];
+          const x = sx(n.x), y = sy(n.y) + Math.sin(t * 0.8 + n.ph) * 1.2 * dpr;
+          n.sx = x; n.sy = y;
+          const r = (3.4 + Math.min(6, Math.sqrt(n.count) * 1.5)) * dpr;
+          n.sr = r;
+          const a = vis ? 1 : 0.18;
+          n.flash = Math.max(0, n.flash - 0.012);
+          sprite(rgb, x, y, r * (5 + n.flash * 6), (0.35 + n.flash * 0.6) * a);
+          dot(x, y, r, `rgba(${rgb},${0.95 * a})`);
+          if (n.flash > 0) {
+            ctx.strokeStyle = `rgba(${rgb},${n.flash})`;
+            ctx.lineWidth = 1.5 * dpr;
+            ctx.beginPath(); ctx.arc(x, y, r + (1 - n.flash) * 18 * dpr, 0, Math.PI * 2); ctx.stroke();
+          }
+          if (filterAction === n.id || hoverNode === n) {
+            ctx.strokeStyle = "rgba(236,242,250,0.85)";
+            ctx.lineWidth = 1.2 * dpr;
+            ctx.beginPath(); ctx.arc(x, y, r + 4 * dpr, 0, Math.PI * 2); ctx.stroke();
+          }
+          if (S / dpr > 200) { // only when there is room to read them
+            ctx.font = `${10.5 * dpr}px "Segoe UI", system-ui, sans-serif`;
+            ctx.fillStyle = `rgba(152,162,182,${0.85 * a})`;
+            ctx.fillText(n.label, x, y + r + 13 * dpr);
+          }
+        }
+
+        // Core — the orb at the centre of everything.
+        const beat = 0.5 + 0.5 * Math.sin(t * (1.2 + I * 2.2));
+        const coreR = (15 + I * 6 + beat * 2) * dpr * Math.min(1.6, Math.max(0.6, S / dpr / 250));
+        const coreRgb = mode === "confirm" ? "232,181,74" : mode === "listen" ? RGB.white : RGB.cyan;
+        sprite(coreRgb, OX, OY, coreR * (7 + I * 4), 0.28 + I * 0.3);
+        sprite(coreRgb, OX, OY, coreR * 3.4, 0.55 + I * 0.3);
+        dot(OX, OY, coreR, `rgba(${coreRgb},0.95)`);
+        dot(OX, OY, coreR * 0.55, "rgba(255,255,255,0.65)");
+
         if (mode === "listen") {
-          const puls = 0.5 + 0.5 * Math.sin(t * 6.5);
-          const pr = UNIT * (0.44 + 0.05 * puls);
-          ctx.lineWidth = 2.6 * DPR;
-          ctx.strokeStyle = `rgba(236,228,224,${0.30 + 0.30 * puls})`;
-          ctx.beginPath(); ctx.arc(CX, CY, pr, 0, Math.PI * 2); ctx.stroke();
-          ctx.lineWidth = 1.6 * DPR;
-          ctx.strokeStyle = `rgba(206,28,48,${0.30 + 0.25 * (1 - puls)})`;
-          ctx.beginPath(); ctx.arc(CX, CY, pr * 0.82, 0, Math.PI * 2); ctx.stroke();
+          for (let k = 0; k < 2; k++) {
+            const ph = ((t * 0.9 + k * 0.5) % 1);
+            ctx.strokeStyle = `rgba(236,242,250,${(1 - ph) * 0.6})`;
+            ctx.lineWidth = 1.6 * dpr;
+            ctx.beginPath(); ctx.arc(OX, OY, coreR * (1.4 + ph * 3), 0, Math.PI * 2); ctx.stroke();
+          }
+        } else if (mode === "think") {
+          ctx.lineWidth = 2 * dpr;
+          for (let k = 0; k < 3; k++) {
+            const a0 = t * (2.2 + k * 0.7) + k * 2.1;
+            ctx.strokeStyle = `rgba(164,139,255,${0.75 - k * 0.18})`;
+            ctx.beginPath(); ctx.arc(OX, OY, coreR * (1.7 + k * 0.45), a0, a0 + 1.4); ctx.stroke();
+          }
+        } else if (mode === "confirm") {
+          ctx.strokeStyle = `rgba(232,181,74,${0.4 + beat * 0.45})`;
+          ctx.lineWidth = 2 * dpr;
+          ctx.beginPath(); ctx.arc(OX, OY, coreR * 1.9, 0, Math.PI * 2); ctx.stroke();
         }
-
-        // Spectral filaments — rare gothic lightning from the core.
-        if (!paused && Math.random() < 0.012 + I * 0.03) spawnFilament();
-        for (let i = filaments.length - 1; i >= 0; i--) {
-          const f = filaments[i];
-          f.life -= 0.06;
-          if (f.life <= 0) { filaments.splice(i, 1); continue; }
-          ctx.strokeStyle = `rgba(${f.hue},${f.life * 0.55})`;
-          ctx.lineWidth = (0.8 + f.life) * DPR;
-          ctx.beginPath();
-          ctx.moveTo(f.pts[0][0], f.pts[0][1]);
-          for (let s = 1; s < f.pts.length; s++) ctx.lineTo(f.pts[s][0], f.pts[s][1]);
-          ctx.stroke();
-        }
-
-        // Action ripples.
         for (let i = ripples.length - 1; i >= 0; i--) {
           const rp = ripples[i];
-          rp.r += UNIT * 0.02;
-          rp.life -= 0.02;
+          rp.r += 0.025; rp.life -= 0.02;
           if (rp.life <= 0) { ripples.splice(i, 1); continue; }
-          ctx.strokeStyle = `rgba(${rp.hue},${rp.life * 0.5})`;
-          ctx.lineWidth = 2 * DPR;
-          ctx.beginPath();
-          ctx.arc(CX, CY, rp.r, 0, Math.PI * 2);
-          ctx.stroke();
+          ctx.strokeStyle = `rgba(${rp.rgb},${rp.life * 0.5})`;
+          ctx.lineWidth = 1.6 * dpr;
+          ctx.beginPath(); ctx.ellipse(OX, OY, rp.r * S * 1.12, rp.r * S * 0.92, 0, 0, Math.PI * 2); ctx.stroke();
         }
 
-        // Heavy vignette — frame it in shadow.
-        ctx.globalCompositeOperation = "source-over";
-        const vig = ctx.createRadialGradient(CX, CY, UNIT * 0.7, CX, CY, Math.max(W, H) * 0.9);
-        vig.addColorStop(0, "rgba(0,0,0,0)");
-        vig.addColorStop(1, "rgba(0,0,0,0.68)");
-        ctx.fillStyle = vig;
-        ctx.fillRect(0, 0, W, H);
+        // Core label.
+        ctx.font = `600 ${12 * dpr}px "Segoe UI", system-ui, sans-serif`;
+        ctx.fillStyle = "rgba(228,233,243,0.95)";
+        ctx.fillText("Nyxa", OX, OY + coreR + 18 * dpr);
+        if (S / dpr > 150) {
+          ctx.font = `${10.5 * dpr}px "Segoe UI", system-ui, sans-serif`;
+          ctx.fillStyle = "rgba(152,162,182,0.9)";
+          ctx.fillText(coreWord, OX, OY + coreR + 32 * dpr);
+        }
 
+        ctx.filter = "none";
         requestAnimationFrame(draw);
       }
 
-      function drawSprite(img, x, y, size, alpha) {
-        ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-        ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
-        ctx.globalAlpha = 1;
+      // ─── Pointer: hover tooltip, click-to-filter, drag pan, wheel zoom ─────
+      let hoverNode = null, drag = null;
+      const tip = $("tip");
+      function pick(ev) {
+        const r = canvas.getBoundingClientRect();
+        const x = (ev.clientX - r.left) * DPR, y = (ev.clientY - r.top) * DPR;
+        let best = null, bd = Infinity;
+        for (const n of nodes) {
+          if (n.sx == null || !nodeVisible(n)) continue;
+          const d = Math.hypot(n.sx - x, n.sy - y);
+          if (d < n.sr + 8 * DPR && d < bd) { bd = d; best = n; }
+        }
+        return best;
       }
-
-      function flare(hue) {
-        ripples.push({ r: UNIT * 0.15, life: 1, hue: hue || "206,28,48" });
-        spawnFilament(); spawnFilament();
-        targetIntensity = Math.min(1, targetIntensity + 0.4);
+      function showTip(n, ev) {
+        if (!n) { tip.classList.remove("show"); return; }
+        const tierName = { "safe-auto": "Runs instantly", "needs-confirm": "Asks first", "deny-by-default": "Needs a click" }[n.tier];
+        tip.innerHTML =
+          `<div class="t1"><i class="d" style="background:rgb(${TIER_RGB[n.disabled ? "off" : n.tier]})"></i>${n.label}</div>` +
+          `<div class="t2">${n.id}</div><p>${n.desc}</p>` +
+          `<div class="t3"><span>${n.disabled ? "Disabled" : tierName}</span><span class="num">${n.count} use${n.count === 1 ? "" : "s"}</span></div>`;
+        const r = wrap.getBoundingClientRect();
+        let x = ev.clientX - r.left + 14, y = ev.clientY - r.top + 14;
+        if (x + 240 > r.width) x -= 260;
+        if (y + 130 > r.height) y -= 140;
+        tip.style.left = x + "px"; tip.style.top = y + "px";
+        tip.classList.add("show");
       }
+      canvas.addEventListener("pointerdown", (ev) => {
+        drag = { x: ev.clientX, y: ev.clientY, px: view.px, py: view.py, moved: false };
+        canvas.setPointerCapture(ev.pointerId);
+      });
+      canvas.addEventListener("pointermove", (ev) => {
+        if (drag) {
+          const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+          if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+          if (drag.moved) {
+            view.px = drag.px + dx; view.py = drag.py + dy;
+            canvas.classList.add("dragging"); showTip(null); return;
+          }
+        }
+        hoverNode = pick(ev);
+        canvas.classList.toggle("hovering", !!hoverNode);
+        showTip(hoverNode, ev);
+      });
+      canvas.addEventListener("pointerup", (ev) => {
+        const wasDrag = drag && drag.moved;
+        drag = null; canvas.classList.remove("dragging");
+        if (wasDrag) return;
+        const n = pick(ev);
+        setFilter(n && n.id !== filterAction ? n.id : null);
+        closeGuide();
+      });
+      canvas.addEventListener("pointerleave", () => { hoverNode = null; showTip(null); });
+      canvas.addEventListener("dblclick", () => { view.tzoom = 1; view.px = 0; view.py = 0; });
+      canvas.addEventListener("wheel", (ev) => {
+        ev.preventDefault();
+        view.tzoom = Math.max(0.5, Math.min(2.6, view.tzoom * (ev.deltaY < 0 ? 1.12 : 1 / 1.12)));
+      }, { passive: false });
+      $("zoomIn").addEventListener("click", () => { view.tzoom = Math.min(2.6, view.tzoom * 1.2); });
+      $("zoomOut").addEventListener("click", () => { view.tzoom = Math.max(0.5, view.tzoom / 1.2); });
 
-      requestAnimationFrame(draw);
+      // Tier legend doubles as a filter.
+      document.querySelectorAll("#legend .chip").forEach((c) => c.addEventListener("click", () => {
+        const tier = c.dataset.tier;
+        tierOff.has(tier) ? tierOff.delete(tier) : tierOff.add(tier);
+        c.classList.toggle("off", tierOff.has(tier));
+      }));
 
-      // ─── State wiring ──────────────────────────────────────────────────────
-      // Map the engine's status string to the orb's mood + mode.
+      // ─── Status polling ────────────────────────────────────────────────────
+      let coreWord = "starting up";
       function moodFrom(status) {
         const s = (status || "").toLowerCase();
-        if (s.startsWith("paused")) return { i: 0.12, paused: true, mode: "paused", word: "paused" };
+        if (s.startsWith("paused")) return { i: 0.1, paused: true, mode: "paused", word: "paused" };
         if (s.startsWith("waiting for on-screen")) return { i: 0.9, mode: "confirm", word: "confirm on screen" };
         if (s.includes("?")) return { i: 0.85, mode: "confirm", word: "awaiting your yes / no" };
-        if (s.startsWith("thinking")) return { i: 0.95, mode: "think", word: "thinking" };
-        if (s.startsWith("heard")) return { i: 0.85, mode: "act", word: status.slice(6) };
-        if (s.startsWith("listening for")) return { i: 0.38, mode: "idle", word: "waiting" };
-        if (s.startsWith("listening")) return { i: 0.98, mode: "listen", word: "listening…" };
+        if (s.startsWith("thinking")) return { i: 0.95, mode: "think", word: "thinking…" };
+        if (s.startsWith("heard")) return { i: 0.85, mode: "act", word: status.slice(6).trim() };
+        if (s.startsWith("listening for")) return { i: 0.4, mode: "idle", word: "waiting for wake word" };
+        if (s.startsWith("listening")) return { i: 1, mode: "listen", word: "listening…" };
         if (s.startsWith("didn")) return { i: 0.5, mode: "idle", word: "didn’t catch that" };
         if (s.startsWith("couldn")) return { i: 0.5, mode: "idle", word: "model offline" };
-        if (s.includes(":")) return { i: 0.7, mode: "act", word: status.split(":")[1].trim() };
+        const am = (status || "").match(/^([a-z_]+\.[a-z_]+):\s*(\S+)/);
+        if (am) return { i: 0.7, mode: "act", word: `${BY_ID[am[1]]?.label || am[1]} · ${outcomeText(am[2]).toLowerCase()}` };
+        if (s.includes(":")) return { i: 0.7, mode: "act", word: status.split(":").slice(1).join(":").trim() };
         return { i: 0.45, mode: "idle", word: status || "ready" };
       }
 
@@ -531,34 +1065,197 @@
           paused = !!s.paused;
           const m = moodFrom(s.status);
           targetIntensity = m.i;
-          mode = m.paused ? "paused" : m.mode;
-          const statusEl = document.getElementById("status");
-          statusEl.textContent = m.word;
-          statusEl.classList.toggle("paused", !!m.paused);
-          document.getElementById("pause").textContent = paused ? "Resume" : "Pause";
+          mode = paused ? "paused" : m.mode;
+          coreWord = paused ? "paused" : m.word;
+          $("status").textContent = coreWord;
+          $("statusPill").dataset.mode = mode;
+          $("pause").querySelector(".lbl").textContent = paused ? "Resume" : "Pause";
+          $("pause").classList.toggle("on", paused);
           if (s.status !== lastStatus) {
-            const ls = (s.status || "").toLowerCase();
-            if (ls.includes("executed") || ls.startsWith("heard")) {
-              flare(ls.includes("executed") ? "236,228,224" : "206,28,48");
-            }
-            lastStatus = s.status;
+            const ls = s.status || "";
+            const am = ls.match(/^([a-z_]+\.[a-z_]+):\s*(\S+)/);
+            if (am) fire(am[1], outcomeClass(am[2]));
+            else if (ls.toLowerCase().startsWith("heard")) ripples.push({ r: 0.1, life: 1, rgb: RGB.cyan });
+            if (am) refreshHistory();
+            lastStatus = ls;
           }
         } catch (e) {}
       }
 
-      // ─── Guide drawer ──────────────────────────────────────────────────────
-      const guideEl = document.getElementById("guide");
-      const closeGuide = () => guideEl.classList.remove("open");
-      document.getElementById("pause").addEventListener("click", async () => { await invoke("toggle_pause"); tickStatus(); });
-      document.getElementById("guideBtn").addEventListener("click", () => guideEl.classList.toggle("open"));
-      document.getElementById("closeGuide").addEventListener("click", closeGuide);
-      // Esc closes the guide; clicking the orb (outside the drawer) too.
-      window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeGuide(); });
-      canvas.addEventListener("click", closeGuide);
+      // ─── History (audit log) → log, ranking, timeline, heatmap ─────────────
+      let history = [];          // newest first, with parsed .date
+      let dayOffset = 0;         // 0 = today, -1 = yesterday, ...
+      let sideView = "log";
+      const pad = (n) => String(n).padStart(2, "0");
+      const hhmm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const dayStart = (off) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + off); return d; };
+      const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+      const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+      async function refreshHistory() {
+        try {
+          const rows = await invoke("get_history");
+          history = (rows || []).map((r) => ({ ...r, date: new Date(r.ts) })).filter((r) => !isNaN(r.date));
+        } catch (e) { return; }
+        for (const n of nodes) n.count = 0;
+        for (const r of history) { const n = r.action && BY_ID[r.action] && nodes.find((m) => m.id === r.action); if (n) n.count++; }
+        renderAll();
+      }
+
+      function dayRows() {
+        const day = dayStart(dayOffset);
+        return history.filter((r) => sameDay(r.date, day));
+      }
+      function matches(r) {
+        if (filterAction && r.action !== filterAction) return false;
+        if (!query) return true;
+        return ((r.transcript || "") + " " + (r.action || "")).toLowerCase().includes(query);
+      }
+
+      function renderStats() {
+        const today = history.filter((r) => sameDay(r.date, dayStart(0)));
+        $("statToday").textContent = today.length;
+        const acted = history.filter((r) => r.action);
+        const ok = acted.filter((r) => outcomeClass(r.outcome) === "ok").length;
+        $("statRate").textContent = acted.length ? Math.round((ok / acted.length) * 100) + "%" : "—";
+      }
+
+      function renderList() {
+        const list = $("list");
+        if (sideView === "top") {
+          const counts = {};
+          for (const r of history) if (r.action && matches(r)) counts[r.action] = (counts[r.action] || 0) + 1;
+          const total = Object.values(counts).reduce((a, b) => a + b, 0);
+          const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+          if (!ranked.length) { list.innerHTML = `<div class="empty">No actions yet.<br>Your most-used commands will rank here.</div>`; return; }
+          list.innerHTML = ranked.map(([id, c], i) => {
+            const a = BY_ID[id];
+            const rgb = TIER_RGB[a ? (a.disabled ? "off" : a.tier) : "off"];
+            const share = Math.round((c / total) * 100);
+            return `<div class="row"><span class="idx num">${i + 1}</span>` +
+              `<div class="main"><div>${esc(a ? a.label : id)}</div><small>${esc(id)}</small>` +
+              `<div class="bar"><i style="width:${share}%;background:rgb(${rgb})"></i></div></div>` +
+              `<div class="meta"><span class="res ok num">${c}</span><small class="num">${share}%</small></div></div>`;
+          }).join("");
+          return;
+        }
+        const rows = dayRows().filter(matches);
+        if (!rows.length) {
+          const when = dayOffset === 0 ? "today" : "on this day";
+          list.innerHTML = filterAction || query
+            ? `<div class="empty">Nothing matches this filter ${when}.</div>`
+            : `<div class="empty">No commands ${when}.<br><b>Clap three times</b> or say <b>&ldquo;hey jarvis&rdquo;</b> to start.</div>`;
+          return;
+        }
+        list.innerHTML = rows.map((r, i) => {
+          const cls = outcomeClass(r.outcome);
+          const sub = [r.action || "no action", r.stage].filter(Boolean).join(" · ");
+          return `<div class="row"><span class="idx num">${i + 1}</span>` +
+            `<div class="main"><div title="${esc(r.transcript)}">${esc(r.transcript || "—")}</div><small>${esc(sub)}</small></div>` +
+            `<div class="meta"><span class="res ${cls}">${esc(outcomeText(r.outcome))}</span><small class="num">${hhmm(r.date)}</small></div></div>`;
+        }).join("");
+      }
+
+      function renderTimeline() {
+        const day = dayStart(dayOffset);
+        $("dayLabel").textContent = dayOffset === 0 ? "Today" : dayOffset === -1 ? "Yesterday"
+          : day.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+        $("dayNext").disabled = dayOffset >= 0;
+        $("dayPrev").disabled = dayOffset <= -6;
+        let html = `<div class="base"></div><div class="ticks">`;
+        for (let h = 0; h <= 24; h++) html += `<i class="tick${h % 3 === 0 ? " major" : ""}" style="left:${(h / 24) * 100}%"></i>`;
+        html += `</div>`;
+        for (let h = 0; h < 24; h += 3) html += `<span class="hl num" style="left:${(h / 24) * 100}%">${pad(h)}</span>`;
+        for (const r of dayRows().filter(matches)) {
+          const f = (r.date.getHours() * 60 + r.date.getMinutes()) / 1440;
+          html += `<i class="ev" title="${esc(hhmm(r.date) + " · " + (r.transcript || ""))}" style="left:${f * 100}%;background:rgb(${RES_RGB[outcomeClass(r.outcome)]})"></i>`;
+        }
+        if (dayOffset === 0) {
+          const now = new Date();
+          const f = (now.getHours() * 60 + now.getMinutes()) / 1440;
+          html += `<div class="now" style="left:${f * 100}%"><span class="num">${hhmm(now)}</span></div>`;
+        }
+        $("track").innerHTML = html;
+      }
+
+      function renderHeat() {
+        const el = $("heat");
+        if (!el.classList.contains("show")) return;
+        const grid = [];
+        let max = 0;
+        for (let d = 6; d >= 0; d--) {
+          const day = dayStart(-d), row = new Array(24).fill(0);
+          for (const r of history) if (sameDay(r.date, day) && matches(r)) row[r.date.getHours()]++;
+          max = Math.max(max, ...row);
+          grid.push({ day, row });
+        }
+        let html = `<div class="heat-title"><b>Commands by hour</b>last 7 days</div><div class="heatgrid"><span></span>`;
+        for (let h = 0; h < 24; h++) html += `<span class="cl num">${h % 3 === 0 ? pad(h) : ""}</span>`;
+        for (const { day, row } of grid) {
+          html += `<span class="rl">${sameDay(day, dayStart(0)) ? "Today" : day.toLocaleDateString(undefined, { weekday: "short" })}</span>`;
+          for (let h = 0; h < 24; h++) {
+            const v = row[h];
+            const a = v ? 0.18 + 0.82 * (v / max) : 0;
+            html += `<i class="cell" title="${v} at ${pad(h)}:00" style="${v ? `background:rgba(126,232,245,${a.toFixed(2)})` : ""}"></i>`;
+          }
+        }
+        html += `</div>`;
+        const week = history.filter((r) => r.date >= dayStart(-6) && matches(r));
+        const acted = week.filter((r) => r.action);
+        const ok = acted.filter((r) => outcomeClass(r.outcome) === "ok").length;
+        const byHour = new Array(24).fill(0); for (const r of week) byHour[r.date.getHours()]++;
+        const peak = week.length ? byHour.indexOf(Math.max(...byHour)) : -1;
+        const local = week.filter((r) => !r.model).length;
+        html += `<div class="heat-stats">` +
+          `<div class="kpi"><small>Commands</small><b class="num">${week.length}</b></div>` +
+          `<div class="kpi"><small>Completed</small><b class="num">${acted.length ? Math.round((ok / acted.length) * 100) + "%" : "—"}</b></div>` +
+          `<div class="kpi"><small>Busiest hour</small><b class="num">${peak < 0 ? "—" : pad(peak) + ":00"}</b></div>` +
+          `<div class="kpi"><small>Grammar-only</small><b class="num">${week.length ? Math.round((local / week.length) * 100) + "%" : "—"}</b></div>` +
+          `</div>`;
+        el.innerHTML = html;
+      }
+
+      function renderAll() { renderStats(); renderList(); renderTimeline(); renderHeat(); }
+
+      function setFilter(id) {
+        filterAction = id;
+        const a = id && BY_ID[id];
+        $("filterText").textContent = a ? `Showing: ${a.label}` : "";
+        $("filterChip").classList.toggle("show", !!a);
+        renderAll();
+      }
+      $("clearFilter").addEventListener("click", () => setFilter(null));
+      $("search").addEventListener("input", (e) => { query = e.target.value.trim().toLowerCase(); renderAll(); });
+      $("dayPrev").addEventListener("click", () => { dayOffset = Math.max(-6, dayOffset - 1); renderAll(); });
+      $("dayNext").addEventListener("click", () => { dayOffset = Math.min(0, dayOffset + 1); renderAll(); });
+
+      document.querySelectorAll("#viewSeg button").forEach((b) => b.addEventListener("click", () => {
+        document.querySelectorAll("#viewSeg button").forEach((x) => x.classList.toggle("active", x === b));
+        $("heat").classList.toggle("show", b.dataset.view === "heat");
+        document.querySelector(".net").classList.toggle("heatmode", b.dataset.view === "heat");
+        renderHeat();
+      }));
+      document.querySelectorAll("#sideSeg button").forEach((b) => b.addEventListener("click", () => {
+        document.querySelectorAll("#sideSeg button").forEach((x) => x.classList.toggle("active", x === b));
+        sideView = b.dataset.side;
+        $("cols").innerHTML = sideView === "top" ? "<span>#</span><span>Action</span><span>Uses</span>" : "<span>#</span><span>Command</span><span>Result</span>";
+        renderList();
+      }));
+      $("logBtn").addEventListener("click", () => $("side").classList.toggle("open"));
+
+      // ─── Buttons + guide drawer ────────────────────────────────────────────
+      const guideEl = $("guide"), scrim = $("scrim");
+      function openGuide() { guideEl.classList.add("open"); scrim.classList.add("show"); }
+      function closeGuide() { guideEl.classList.remove("open"); scrim.classList.remove("show"); }
+      $("pause").addEventListener("click", async () => { try { await invoke("toggle_pause"); } catch (e) {} tickStatus(); });
+      $("guideBtn").addEventListener("click", () => (guideEl.classList.contains("open") ? closeGuide() : openGuide()));
+      $("closeGuide").addEventListener("click", closeGuide);
+      scrim.addEventListener("click", closeGuide);
+      window.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeGuide(); $("side").classList.remove("open"); } });
 
       // ─── Ambient music (procedural — no audio files) ────────────────────────
-      // A faint, dark A-minor drone with a reverb wash and sparse ethereal
-      // bells, to match the gothic orb. All synthesized; nothing external.
+      // A faint A-minor drone with a delay wash and sparse bells. All
+      // synthesized; nothing external.
       const Music = (() => {
         let ctx, master, lp, on = false, built = false, bellTimer = null;
         function build() {
@@ -573,7 +1270,7 @@
           lp.connect(master); lp.connect(delay); delay.connect(wet); wet.connect(master);
           master.connect(ctx.destination);
 
-          const chord = [110, 130.81, 164.81, 220]; // A2 C3 E3 A3 — dark minor
+          const chord = [110, 130.81, 164.81, 220]; // A2 C3 E3 A3
           chord.forEach((f, i) => {
             const o = ctx.createOscillator();
             o.type = i < 2 ? "sine" : "triangle";
@@ -621,9 +1318,10 @@
         };
       })();
 
-      const musicBtn = document.getElementById("musicBtn");
-      let musicOn = localStorage.getItem("jarvis_music") !== "off"; // default on
-      function applyMusic() { Music.set(musicOn); musicBtn.textContent = musicOn ? "Music: on" : "Music: off"; }
+      const musicBtn = $("musicBtn");
+      let musicOn = true;
+      try { musicOn = localStorage.getItem("jarvis_music") !== "off"; } catch (e) {} // default on
+      function applyMusic() { Music.set(musicOn); musicBtn.classList.toggle("on", musicOn); }
       musicBtn.addEventListener("click", () => {
         musicOn = !musicOn;
         try { localStorage.setItem("jarvis_music", musicOn ? "on" : "off"); } catch (e) {}
@@ -638,13 +1336,18 @@
       // Show the guide automatically the first time only.
       try {
         if (!localStorage.getItem("jarvis_seen_guide")) {
-          guideEl.classList.add("open");
+          openGuide();
           localStorage.setItem("jarvis_seen_guide", "1");
         }
       } catch (e) {}
 
+      requestAnimationFrame(draw);
+      renderAll();
       tickStatus();
+      refreshHistory();
       setInterval(tickStatus, 280);
+      setInterval(refreshHistory, 5000);
+      setInterval(renderTimeline, 30000); // keep the "now" marker moving
     </script>
 
     <!-- ─── Hand-gesture control (MediaPipe HandLandmarker, all local) ─────── -->
@@ -653,6 +1356,7 @@
 
       const G = window.NyxaGesture;
       const btn = document.getElementById("gestureBtn");
+      const btnLabel = btn.querySelector(".lbl");
       const hud = document.getElementById("camhud");
       const video = document.getElementById("cam");
       const label = document.getElementById("camlabel");
@@ -661,6 +1365,7 @@
       let lastVideoTime = -1, noHandSince = 0;
       const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
       function setLabel(text, err) { label.textContent = text; label.classList.toggle("err", !!err); }
+      function setBtn(text, on) { btnLabel.textContent = text; btn.classList.toggle("on", on); }
       function neutral() { G.tx = 0; G.ty = 0; G.ts = 1; }
 
       async function ensureLandmarker() {
@@ -689,11 +1394,11 @@
         }
         noHandSince = 0;
         if (hands.length === 1) {
-          // One hand → orb follows it (mirror x for a natural, selfie feel).
+          // One hand → network follows it (mirror x for a natural, selfie feel).
           const p = palm(hands[0]);
           G.tx = clamp((1 - p.x - 0.5) * 2.2, -1, 1);
           G.ty = clamp((p.y - 0.5) * 2.2, -1, 1);
-          setLabel("✋ move · 1 hand");
+          setLabel("move · 1 hand");
         } else {
           // Two hands → position from their midpoint, zoom from their spread.
           const a = palm(hands[0]), b = palm(hands[1]);
@@ -701,7 +1406,7 @@
           G.ty = clamp(((a.y + b.y) / 2 - 0.5) * 2.2, -1, 1);
           const d = Math.hypot(a.x - b.x, a.y - b.y);        // ~0.12 together … ~0.6 apart
           G.ts = clamp(0.6 + ((d - 0.12) / (0.6 - 0.12)) * (2.2 - 0.6), 0.55, 2.4);
-          setLabel("🙌 zoom · 2 hands");
+          setLabel("zoom · 2 hands");
         }
       }
 
@@ -716,7 +1421,7 @@
 
       async function start() {
         try {
-          btn.textContent = "Gesture: …";
+          setBtn("Gesture…", false);
           hud.hidden = false;
           await ensureLandmarker();
           stream = await navigator.mediaDevices.getUserMedia({
@@ -725,12 +1430,12 @@
           video.srcObject = stream;
           await video.play();
           running = true; G.active = true;
-          btn.textContent = "Gesture: on";
+          setBtn("Gesture", true);
           setLabel("show a hand ✋");
           loop();
         } catch (e) {
           setLabel("camera unavailable: " + (e.name || e.message || e), true);
-          btn.textContent = "Gesture: off";
+          setBtn("Gesture", false);
           running = false; G.active = false;
         }
       }
@@ -743,7 +1448,7 @@
         hud.hidden = true;
         G.hands = 0;
         neutral();
-        btn.textContent = "Gesture: off";
+        setBtn("Gesture", false);
       }
 
       btn.addEventListener("click", () => (running ? stop() : start()));

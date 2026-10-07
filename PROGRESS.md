@@ -310,6 +310,15 @@
       interface set garbage/muted the mic. Correct order documented in
       /tmp/micfix2.ps1 pattern (Set/GetMasterVolumeLevelScalar at slots 5/7,
       SetMute/GetMute at 12/13).
+- **UI redesign (2026-10-07):** `crates/jarvis-app/ui/index.html` rebuilt as a
+  dark analytics-dashboard console (Pinterest "Handshake" dashboard as the
+  reference). Canvas network of the 22 registry actions grouped by area and
+  coloured by tier around the core orb; command log + "Top actions" ranking
+  now read `get_history` (was unused); day timeline; 7-day heatmap. Gesture
+  pan/zoom, pause, music, guide drawer all kept. Default window 1160×720
+  (min 640×480). The action list is mirrored by hand in the UI — update the
+  `ACTIONS` array when `registry/actions.toml` changes. Landing page
+  (`docs/index.html`) and tray icon still use the old crimson look.
 
 ## Hard-won knowledge (do not re-learn)
 

@@ -83,8 +83,8 @@ fn open_window(app: &AppHandle) {
     }
     let _ = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
         .title("Nyxa")
-        .inner_size(780.0, 640.0)
-        .min_inner_size(440.0, 420.0)
+        .inner_size(1160.0, 720.0)
+        .min_inner_size(640.0, 480.0)
         .resizable(true)
         // Auto-grant the webcam to the real camera device (no popup) so the
         // hand-gesture control can start immediately when the user enables it.

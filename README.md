@@ -7,9 +7,9 @@ machine** — wake word, speech recognition, intent parsing, and execution are
 all local. No cloud, no API keys, no audio ever leaving your laptop.
 
 Say *"hey jarvis, open youtube and search lo-fi study beats"* and it happens.
-Show the app your hands and its orb UI pans and zooms with them.
+Show the app your hands and its action network pans and zooms with them.
 
-<!-- TODO: demo GIF of the orb + a voice command + two-hand zoom -->
+<!-- TODO: demo GIF of the console + a voice command + two-hand zoom -->
 
 ## Features
 
@@ -28,9 +28,11 @@ Show the app your hands and its orb UI pans and zooms with them.
 - **Tiered permission model** (see below) with an append-only audit log and a
   hardware kill switch (`Ctrl+Shift+Alt+K`).
 - **Hand-gesture control** — MediaPipe hand tracking (also fully local): one
-  hand pans the orb, two hands zoom by spreading them apart.
-- **Tray app** — Tauri v2, animated orb that reacts to listening/thinking/
-  acting states.
+  hand pans the action network, two hands zoom by spreading them apart.
+- **Tray app** — Tauri v2 command console: a live network of every registry
+  action (coloured by permission tier) around a core that reacts to
+  listening/thinking/acting states, a command log read from the audit log,
+  a day timeline, and a 7-day activity heatmap.
 
 ## Security model
 
@@ -87,8 +89,8 @@ cargo run --release -p jarvis-cli -- --dry-run                # print, don't exe
 
 ## Usage
 
-1. Launch the app — the orb window opens and the tray icon appears.
-2. Say **"hey jarvis"** (or clap 3×), wait for the orb to brighten, then speak:
+1. Launch the app — the console window opens and the tray icon appears.
+2. Say **"hey jarvis"** (or clap 3×), wait for the core to light up, then speak:
    - "open youtube and search for lo-fi study beats"
    - "play believer on spotify" / "pause music" / "volume up"
    - "close the youtube tab" → answers a spoken *yes or no?*

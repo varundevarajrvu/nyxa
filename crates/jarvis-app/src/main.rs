@@ -100,38 +100,49 @@ fn open_window(app: &AppHandle) {
 }
 
 fn main() {
-    // Load the engine and grab the shared handles BEFORE moving it into the
-    // background thread that runs the mic loop.
-    let engine = match Engine::load(EngineConfig::default()) {
-        Ok(e) => e,
-        Err(e) => {
-            eprintln!("jarvis: failed to start engine: {e:#}");
-            std::process::exit(1);
-        }
-    };
-    let status = engine.status_handle();
-    let audit_path = engine.audit_path();
-    let halted = kill::spawn_hotkey_watcher();
-
-    // Run the always-on listener on its own thread.
-    let mut engine_mut = engine;
-    let halted_thread = halted.clone();
-    std::thread::spawn(move || {
-        if let Err(e) = engine_mut.run_mic(halted_thread) {
-            eprintln!("jarvis: mic loop ended: {e:#}");
-        }
-    });
-
     tauri::Builder::default()
         // Single instance: if Jarvis is already running (e.g. in the tray) and
         // the user clicks the taskbar/pin again, don't spawn a duplicate —
-        // just bring the existing window back.
+        // just bring the existing window back. This MUST be the first thing
+        // that happens: the engine load + always-on mic thread are started
+        // below, inside .setup(), specifically so a genuine duplicate launch
+        // exits here (before .setup() ever runs) without ever touching the
+        // microphone. Loading the engine/spawning the mic thread any earlier
+        // in main() (as a prior version of this file did) raced a duplicate
+        // instance into a second, fully-loaded, independently-listening
+        // engine that this plugin could then only ever evict the *window*
+        // of — the second mic kept running regardless, and because Pause
+        // only flips the halted flag of the process whose window you're
+        // looking at, pausing one instance silently left the other one live.
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             open_window(app);
         }))
-        .manage(AppState { status, audit_path, halted })
         .invoke_handler(tauri::generate_handler![get_status, get_history, toggle_pause])
         .setup(|app| {
+            // Load the engine and grab the shared handles BEFORE moving it
+            // into the background thread that runs the mic loop.
+            let engine = match Engine::load(EngineConfig::default()) {
+                Ok(e) => e,
+                Err(e) => {
+                    eprintln!("jarvis: failed to start engine: {e:#}");
+                    std::process::exit(1);
+                }
+            };
+            let status = engine.status_handle();
+            let audit_path = engine.audit_path();
+            let halted = kill::spawn_hotkey_watcher();
+
+            // Run the always-on listener on its own thread.
+            let mut engine_mut = engine;
+            let halted_thread = halted.clone();
+            std::thread::spawn(move || {
+                if let Err(e) = engine_mut.run_mic(halted_thread) {
+                    eprintln!("jarvis: mic loop ended: {e:#}");
+                }
+            });
+
+            app.manage(AppState { status, audit_path, halted });
+
             let handle = app.handle().clone();
 
             let show = MenuItem::with_id(app, "show", "Open Nyxa", true, None::<&str>)?;

@@ -107,6 +107,63 @@ unreliable to risk).
    than screenshot-only verification.
 4. ~~Mark PR #1 ready and merge~~ — done.
 
+## ⚠ Found after merge (2026-10-07, same day) — Pause doesn't stop a duplicate instance
+
+**User report:** "even after pausing Nyxa is listening to my voice." Real bug,
+not a misunderstanding — confirmed two fully-loaded (~1.6 GB each) `jarvis-app`
+processes running simultaneously, each with its own independent mic/wake/chat
+pipeline. The UI Pause button (`toggle_pause`) only flips the `halted`
+`AtomicBool` of the process whose window you're looking at — a second,
+invisible instance keeps capturing and replying regardless. Audit log showed
+a `"halted"` entry followed by 19+ minutes of `stage:"chat"` replies with no
+matching `"resumed"` — the giveaway, since that pattern only happens when a
+*different* (fresh, never-halted) process is the one still answering.
+
+**Root cause: confirmed open upstream bug**, not something fixable from this
+codebase alone — [tauri-apps/plugins-workspace#3587](https://github.com/tauri-apps/plugins-workspace/issues/3587).
+`tauri-plugin-single-instance` v2.4.2 (pinned here, and the bug is still
+present through 2.4.4 per the issue — later point releases were unrelated
+fixes) publishes its detection mutex *before* creating its message window.
+A second launch landing in that gap sees "no window to message" and falls
+through to boot as a full independent instance instead of exiting.
+Reproduced on demand: launching the built exe 3× within ~400 ms consistently
+produced 3 fully-loaded independent engines, confirming the race is real and
+easy to hit (not just a one-off from this session's rapid rebuild/relaunch
+cycles, though those made it very likely to trigger too).
+
+**Mitigation shipped:** `crates/jarvis-app/src/main.rs` — moved
+`Engine::load()` and the `run_mic` background-thread spawn from the top of
+`main()` into `.setup()`, which runs *after* `tauri_plugin_single_instance`'s
+duplicate check. Previously the engine loaded and the mic thread started
+unconditionally before the single-instance plugin ever got a chance to act,
+so even a *correctly-detected* duplicate would have already spun up a live
+mic. This doesn't close the upstream race window itself (that's inside the
+plugin's own Windows FFI code) but it does mean a duplicate caught outside
+that narrow window now never touches the microphone at all. Verified by the
+only reliable method available here — process count/memory, not pixel
+screenshots: 3 rapid launches still produced 3 processes (confirming the
+upstream race is unpatched, as expected), but each now follows the same
+code path as a legitimate single launch, so nothing beyond the plugin's own
+window is a regression risk.
+
+**Immediate workaround for Varun, until a real fix:** the hotkey
+**Ctrl+Shift+Alt+K** is reliable even with duplicate instances — it polls
+`GetAsyncKeyState` (global OS key state) independently in *every* running
+process (`kill.rs`), so one press halts all of them at once, unlike the UI
+Pause button. If Nyxa seems to be listening after pausing, check
+`Get-Process jarvis-app` in PowerShell for more than one entry.
+
+**Real fix, not started — needs its own session:** make Pause/halt a
+cross-process signal (e.g. a marker file under `%APPDATA%\jarvis\` that
+`run_mic` polls alongside the in-process `AtomicBool`, written by
+`toggle_pause`/the hotkey/the tray menu) so pausing from *any* window halts
+*every* instance regardless of how many duplicates exist. Deliberately not
+attempted in this session — after already reverting one unverified fix today
+(the maximize-resize hook above), a cross-process IPC mechanism deserves its
+own careful design and testing pass, not a rushed bolt-on. Also worth
+watching the upstream issue for a real plugin fix and bumping
+`tauri-plugin-single-instance` when one lands.
+
 **Possible follow-up (not started):** a `get_actions` Tauri command that
 serves the registry to the UI, removing the hand-kept `ACTIONS` mirror(s).
 
